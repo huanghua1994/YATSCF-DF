@@ -164,6 +164,7 @@ void TinySCF_build_DF_tensor(TinySCF_t TinySCF)
 				for (int icol = 0; icol < df_nbf; icol++)
 					df_tensor_MN[icol] += pqA_k * Jpq_ptr[icol];
 			}
+			memcpy(df_tensor_NM, df_tensor_MN, DBL_SIZE * df_nbf);
 		}
 	}
 	et = get_wtime_sec();

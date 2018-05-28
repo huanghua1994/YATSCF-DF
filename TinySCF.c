@@ -221,6 +221,10 @@ void init_TinySCF(TinySCF_t TinySCF, char *bas_fname, char *df_bas_fname, char *
 	assert(TinySCF->Jpq       != NULL);
 	TinySCF->mem_size += (double) tensor_memsize * 2;
 	TinySCF->mem_size += (double) DBL_SIZE * TinySCF->df_nbf * TinySCF->df_nbf;
+	// Jpq and pqA is no longer needed after df_tensor is generated,
+	// use them as the buffer for Fock build
+	TinySCF->temp_J = TinySCF->Jpq;
+	TinySCF->temp_K = TinySCF->pqA;
 	
 	double et = get_wtime_sec();
 	TinySCF->init_time = et - st;
@@ -279,6 +283,11 @@ void free_TinySCF(TinySCF_t TinySCF)
 	ALIGN64B_FREE(TinySCF->FDS_mat);
 	ALIGN64B_FREE(TinySCF->DIIS_rhs);
 	ALIGN64B_FREE(TinySCF->DIIS_ipiv);
+
+	// Free density fitting tensors and buffers
+	ALIGN64B_FREE(TinySCF->pqA);
+	ALIGN64B_FREE(TinySCF->Jpq);
+	ALIGN64B_FREE(TinySCF->df_tensor);
 	
 	// Free BasisSet_t and Simint_t object, require Simint_t object print stat info
 	CMS_destroyBasisSet(TinySCF->basis);
@@ -532,7 +541,7 @@ void TinySCF_do_SCF(TinySCF_t TinySCF)
 		TinySCF_build_FockMat(TinySCF);
 		et1 = get_wtime_sec();
 		printf("* Build Fock matrix     : %.3lf (s)\n", et1 - st1);
-		
+
 		// Calculate new system energy
 		st1 = get_wtime_sec();
 		TinySCF_calc_energy(TinySCF);
@@ -540,7 +549,7 @@ void TinySCF_do_SCF(TinySCF_t TinySCF)
 		printf("* Calculate energy      : %.3lf (s)\n", et1 - st1);
 		energy_delta = fabs(TinySCF->HF_energy - prev_energy);
 		prev_energy = TinySCF->HF_energy;
-		
+
 		// DIIS (Pulay mixing)
 		st1 = get_wtime_sec();
 		TinySCF_DIIS(TinySCF);
