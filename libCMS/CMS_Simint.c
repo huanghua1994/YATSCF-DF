@@ -33,7 +33,7 @@
 
 // for Simint, caller provides memory where integrals will be stored
 
-CMSStatus_t CMS_createSimint(BasisSet_t basis, Simint_t *simint, int nthreads)
+CMSStatus_t CMS_createSimint(BasisSet_t basis, BasisSet_t df_basis, Simint_t *simint, int nthreads)
 {
     CMS_ASSERT(nthreads > 0);
 
@@ -63,12 +63,20 @@ CMSStatus_t CMS_createSimint(BasisSet_t basis, Simint_t *simint, int nthreads)
 
     // Form and store Simint shells for all shells of this molecule
     s->nshells = basis->nshells;
-    s->shells = (struct simint_shell *) malloc(sizeof(struct simint_shell)*basis->nshells);
+    s->shells = (struct simint_shell *) malloc(sizeof(struct simint_shell) * basis->nshells);
     CMS_ASSERT(s->shells != NULL);
-    s->shell_memsize = (double) sizeof(struct simint_shell)*basis->nshells;
+    s->shell_memsize = (double) sizeof(struct simint_shell) * basis->nshells;
+	
+	// Form and store Simint shells for all density fitting shells
+	// The last shell is the unit shell
+	s->df_nshells = df_basis->nshells;
+	s->df_shells = (struct simint_shell *) malloc(sizeof(struct simint_shell) * (df_basis->nshells + 1));
+	CMS_ASSERT(s->shells != NULL);
+	s->shell_memsize = (double) sizeof(struct simint_shell) * (df_basis->nshells + 1);
 
+	// Copy all shells of this molecule
     struct simint_shell *shell_p = s->shells;
-    for (int i=0; i<basis->nshells; i++)
+    for (int i = 0; i < basis->nshells; i++)
     {
         // Initialize variables in structure
         simint_initialize_shell(shell_p); 
@@ -83,7 +91,7 @@ CMSStatus_t CMS_createSimint(BasisSet_t basis, Simint_t *simint, int nthreads)
         shell_p->y     = basis->xyz0[i*4+1];
         shell_p->z     = basis->xyz0[i*4+2];
 
-        for (int j=0; j<basis->nexp[i]; j++)
+        for (int j = 0; j < basis->nexp[i]; j++)
         {
             shell_p->alpha[j] = basis->exp[i][j];
             shell_p->coef[j]  = basis->cc[i][j];
@@ -91,9 +99,47 @@ CMSStatus_t CMS_createSimint(BasisSet_t basis, Simint_t *simint, int nthreads)
 
         shell_p++;
     }
+	
+	// Copy all density fitting shells 
+	struct simint_shell *df_shell_p = s->df_shells;
+	for (int i = 0; i < df_basis->nshells; i++)
+    {
+        // Initialize variables in structure
+        simint_initialize_shell(df_shell_p); 
 
-    // Here we assume there are no unit shells (shells with zero orbital exponent)
+        // Allocate space for alpha and coef for the shell
+        simint_allocate_shell(df_basis->nexp[i], df_shell_p);
+        s->shell_memsize += (double) df_shell_p->memsize;
+
+        df_shell_p->am    = df_basis->momentum[i];
+        df_shell_p->nprim = df_basis->nexp[i];
+        df_shell_p->x     = df_basis->xyz0[i*4+0];
+        df_shell_p->y     = df_basis->xyz0[i*4+1];
+        df_shell_p->z     = df_basis->xyz0[i*4+2];
+
+        for (int j = 0; j < df_basis->nexp[i]; j++)
+        {
+            df_shell_p->alpha[j] = df_basis->exp[i][j];
+            df_shell_p->coef[j]  = df_basis->cc[i][j];
+        }
+
+        df_shell_p++;
+    }
+	// The unit shell
+	simint_initialize_shell(df_shell_p); 
+	simint_allocate_shell(1, df_shell_p);
+	s->shell_memsize += (double) df_shell_p->memsize;
+	df_shell_p->am    = 0;
+	df_shell_p->nprim = 1;
+	df_shell_p->x     = 0;
+	df_shell_p->y     = 0;
+	df_shell_p->z     = 0;
+	df_shell_p->alpha[0] = 0;
+	df_shell_p->coef[0]  = 1;
+
+    // Normalize shells except the unit shells
     simint_normalize_shells(basis->nshells, s->shells);
+	simint_normalize_shells(df_basis->nshells, s->df_shells); 
 
     s->screen_method = SIMINT_SCREEN_FASTSCHWARZ;
     s->screen_tol    = 1.e-14;
@@ -119,6 +165,21 @@ CMSStatus_t CMS_createSimint(BasisSet_t basis, Simint_t *simint, int nthreads)
             s->shellpair_memsize += (double) pair->memsize;
         }
     }
+	
+	// Precompute all shell pairs for density fitting, DO NOT SKIP IT
+	s->df_shellpairs = (struct simint_multi_shellpair *) malloc(sizeof(struct simint_multi_shellpair) * df_basis->nshells);
+	CMS_ASSERT(s->df_shellpairs != NULL);
+	s->shellpair_memsize += (double) sizeof(struct simint_multi_shellpair) * df_basis->nshells;
+	int unit_shell_id = df_basis->nshells + 1;
+	for (int i = 0; i < df_basis->nshells; i++)
+	{
+		struct simint_multi_shellpair *pair;
+		pair = &s->df_shellpairs[i];
+		simint_initialize_multi_shellpair(pair);
+		simint_create_multi_shellpair(1, s->df_shells+i, 1, s->df_shells+unit_shell_id, pair, s->screen_method);
+		s->shellpair_memsize += (double) pair->memsize;
+	}
+	
     
     // Reset timer
     s->ostei_setup   = 0.0;

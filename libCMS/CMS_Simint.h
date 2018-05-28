@@ -32,6 +32,10 @@ struct Simint
     int nshells;
     struct simint_shell *shells;
     struct simint_multi_shellpair *shellpairs;
+	
+	int df_nshells;
+	struct simint_shell *df_shells;
+	struct simint_multi_shellpair *df_shellpairs;
 
     int    screen_method;
     double screen_tol;
@@ -51,7 +55,7 @@ typedef struct Simint *Simint_t;
 extern "C" {
 #endif
 
-CMSStatus_t CMS_createSimint(BasisSet_t basis, Simint_t *simint, int nthreads);
+CMSStatus_t CMS_createSimint(BasisSet_t basis, BasisSet_t df_basis, Simint_t *simint, int nthreads);
 
 CMSStatus_t CMS_destroySimint(Simint_t simint, int show_stat);
 

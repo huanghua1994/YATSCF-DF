@@ -19,7 +19,7 @@
 // matrices and arrays and destroying TinySCF engine. Most time consuming functions are in
 // build_Fock.c, build_density.c and DIIS.c
 
-void init_TinySCF(TinySCF_t TinySCF, char *bas_fname, char *xyz_fname, const int niters)
+void init_TinySCF(TinySCF_t TinySCF, char *bas_fname, char *df_bas_fname, char *xyz_fname, const int niters)
 {
 	assert(TinySCF != NULL);
 	
@@ -33,24 +33,32 @@ void init_TinySCF(TinySCF_t TinySCF, char *bas_fname, char *xyz_fname, const int
 	
 	// Load basis set and molecule from input and get chemical system info
 	CMS_createBasisSet(&(TinySCF->basis));
+	CMS_createBasisSet(&(TinySCF->df_basis));
 	CMS_loadChemicalSystem(TinySCF->basis, bas_fname, xyz_fname);
+	CMS_loadChemicalSystem(TinySCF->df_basis, df_bas_fname, xyz_fname);
 	TinySCF->natoms     = CMS_getNumAtoms   (TinySCF->basis);
 	TinySCF->nshells    = CMS_getNumShells  (TinySCF->basis);
 	TinySCF->nbasfuncs  = CMS_getNumFuncs   (TinySCF->basis);
 	TinySCF->n_occ      = CMS_getNumOccOrb  (TinySCF->basis);
 	TinySCF->charge     = CMS_getTotalCharge(TinySCF->basis);
 	TinySCF->electron   = CMS_getNneutral   (TinySCF->basis);
+	TinySCF->df_nbf     = CMS_getNumFuncs   (TinySCF->df_basis);
+	TinySCF->df_nshells = CMS_getNumShells  (TinySCF->df_basis);
 	char *basis_name    = basename(bas_fname);
+	char *df_basis_name = basename(df_bas_fname);
 	char *molecule_name = basename(xyz_fname);
 	printf("Job information:\n");
-	printf("    basis set         = %s\n", basis_name);
-	printf("    molecule          = %s\n", molecule_name);
-	printf("    # atoms           = %d\n", TinySCF->natoms);
-	printf("    # shells          = %d\n", TinySCF->nshells);
-	printf("    # basis functions = %d\n", TinySCF->nbasfuncs);
-	printf("    # occupied orbits = %d\n", TinySCF->n_occ);
-	printf("    # charge          = %d\n", TinySCF->charge);
-	printf("    # electrons       = %d\n", TinySCF->electron);
+	printf("    basis set            = %s\n", basis_name);
+	printf("    DF basis set         = %s\n", df_basis_name);
+	printf("    molecule             = %s\n", molecule_name);
+	printf("    # atoms              = %d\n", TinySCF->natoms);
+	printf("    # shells             = %d\n", TinySCF->nshells);
+	printf("    # basis functions    = %d\n", TinySCF->nbasfuncs);
+	printf("    # DF shells          = %d\n", TinySCF->df_nshells);
+	printf("    # DF basis functions = %d\n", TinySCF->df_nbf);
+	printf("    # occupied orbits    = %d\n", TinySCF->n_occ);
+	printf("    # charge             = %d\n", TinySCF->charge);
+	printf("    # electrons          = %d\n", TinySCF->electron);
 	
 	// Initialize OpenMP parallel info and buffer
 	int maxAM, max_buf_entry_size, total_buf_size;
@@ -86,7 +94,7 @@ void init_TinySCF(TinySCF_t TinySCF, char *bas_fname, char *xyz_fname, const int
 	TinySCF->mem_size += (double) (INT_SIZE * 2 * TinySCF->num_uniq_sp);
 	
 	// Initialize Simint object and shell basis function index info
-	CMS_createSimint(TinySCF->basis, &(TinySCF->simint), TinySCF->nthreads);
+	CMS_createSimint(TinySCF->basis, TinySCF->df_basis, &(TinySCF->simint), TinySCF->nthreads);
 	TinySCF->shell_bf_sind = (int*) ALIGN64B_MALLOC(INT_SIZE * (TinySCF->nshells + 1));
 	TinySCF->shell_bf_num  = (int*) ALIGN64B_MALLOC(INT_SIZE * TinySCF->nshells);
 	assert(TinySCF->shell_bf_sind != NULL);
@@ -98,6 +106,19 @@ void init_TinySCF(TinySCF_t TinySCF, char *bas_fname, char *xyz_fname, const int
 		TinySCF->shell_bf_num[i]  = CMS_getShellDim    (TinySCF->basis, i);
 	}
 	TinySCF->shell_bf_sind[TinySCF->nshells] = TinySCF->nbasfuncs;
+	
+	// Initialize density fitting shell basis function index info
+	TinySCF->df_shell_bf_sind = (int*) ALIGN64B_MALLOC(INT_SIZE * (TinySCF->df_nshells + 1));
+	TinySCF->df_shell_bf_num  = (int*) ALIGN64B_MALLOC(INT_SIZE * TinySCF->df_nshells);
+	assert(TinySCF->df_shell_bf_sind != NULL);
+	assert(TinySCF->df_shell_bf_num  != NULL);
+	TinySCF->mem_size += (double) (INT_SIZE * (2 * TinySCF->df_nshells + 1));
+	for (int i = 0; i < TinySCF->df_nshells; i++)
+	{
+		TinySCF->df_shell_bf_sind[i] = CMS_getFuncStartInd(TinySCF->df_basis, i);
+		TinySCF->df_shell_bf_num[i]  = CMS_getShellDim    (TinySCF->df_basis, i);
+	}
+	TinySCF->df_shell_bf_sind[TinySCF->nshells] = TinySCF->df_nbf;
 	
 	// Allocate memory for matrices and temporary arrays used in SCF
 	size_t mat_mem_size    = DBL_SIZE * TinySCF->mat_size;
@@ -213,6 +234,8 @@ void free_TinySCF(TinySCF_t TinySCF)
 	// Free shell basis function index info arrays
 	ALIGN64B_FREE(TinySCF->shell_bf_sind);
 	ALIGN64B_FREE(TinySCF->shell_bf_num);
+	ALIGN64B_FREE(TinySCF->df_shell_bf_sind);
+	ALIGN64B_FREE(TinySCF->df_shell_bf_num);
 	
 	// Free matrices and temporary arrays used in SCF
 	ALIGN64B_FREE(TinySCF->Hcore_mat);
@@ -247,6 +270,7 @@ void free_TinySCF(TinySCF_t TinySCF)
 	
 	// Free BasisSet_t and Simint_t object, require Simint_t object print stat info
 	CMS_destroyBasisSet(TinySCF->basis);
+	CMS_destroyBasisSet(TinySCF->df_basis);
 	CMS_destroySimint(TinySCF->simint, 1);
 	
 	free(TinySCF);
