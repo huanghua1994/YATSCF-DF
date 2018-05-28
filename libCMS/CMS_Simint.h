@@ -116,6 +116,8 @@ CMS_Simint_computeDFShellPair(
 	double **integrals, int *nints
 );
 
+double CMS_Simint_getDFShellpairScreenVal(Simint_t simint, int i);
+
 #ifdef __cplusplus
 }
 #endif

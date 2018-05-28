@@ -41,6 +41,7 @@ struct TinySCF_struct
 	double *sp_scrval;      // Square of screening values (upper bound) of each shell pair
 	int    *uniq_sp_lid;    // Left shell id of all unique shell pairs
 	int    *uniq_sp_rid;    // Right shell id of all unique shell pairs
+	double *df_sp_scrval;   // Square of screening values (upper bound) of each shell pair in density fitting
 	
 	// ERIs
 	Simint_t simint;        // Simint object for ERI, handled by libCMS

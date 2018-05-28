@@ -23,6 +23,12 @@ void TinySCF_build_DF_tensor(TinySCF_t TinySCF)
 	int *shell_bf_sind    = TinySCF->shell_bf_sind;
 	int *df_shell_bf_sind = TinySCF->df_shell_bf_sind;
 	Simint_t simint       = TinySCF->simint;
+	int *uniq_sp_lid      = TinySCF->uniq_sp_lid;
+	int *uniq_sp_rid      = TinySCF->uniq_sp_rid;
+	int num_uniq_sp       = TinySCF->num_uniq_sp;
+	double *sp_scrval     = TinySCF->sp_scrval;
+	double *df_sp_scrval  = TinySCF->df_sp_scrval;
+	double scrtol2        = TinySCF->shell_scrtol2;
 	
 	double st, et;
 
@@ -31,49 +37,54 @@ void TinySCF_build_DF_tensor(TinySCF_t TinySCF)
 	// Calculate 3-center density fitting integrals
 	// UNDONE: (1) parallelize; (2) batching
 	st = get_wtime_sec();
-	for (int M = 0; M < nshell; M++)
+	for (int iMN = 0; iMN < num_uniq_sp; iMN++)
 	{
-		for (int N = M; N < nshell; N++)
+		int M = uniq_sp_lid[iMN];
+		int N = uniq_sp_rid[iMN];
+		int startM = shell_bf_sind[M];
+		int endM   = shell_bf_sind[M + 1];
+		int startN = shell_bf_sind[N];
+		int endN   = shell_bf_sind[N + 1];
+		int dimM   = endM - startM;
+		int dimN   = endN - startN;
+		double scrval0 = sp_scrval[M * nshell + N];
+		
+		for (int P = 0; P < df_nshell; P++)
 		{
-			int startM = shell_bf_sind[M];
-			int endM   = shell_bf_sind[M + 1];
-			int startN = shell_bf_sind[N];
-			int endN   = shell_bf_sind[N + 1];
-			int dimM   = endM - startM;
-			int dimN   = endN - startN;
-			for (int P = 0; P < df_nshell; P++)
+			double scrval1 = df_sp_scrval[P];
+			if (scrval0 * scrval1 < scrtol2) continue;
+			
+			double *integrals;
+			int nints;
+			int tid = 0;
+			CMS_Simint_computeDFShellQuartet(
+				simint, tid, M, N, P,
+				&integrals, &nints
+			);
+			
+			// if (nints == 0) continue;  // Shell quartet is screened
+			assert(nints > 0);
+			
+			int startP = df_shell_bf_sind[P];
+			int dimP   = df_shell_bf_sind[P + 1] - startP;
+			size_t row_mem_size = sizeof(double) * dimP;
+			
+			for (int iM = startM; iM < endM; iM++)
 			{
-				double *integrals;
-				int nints;
-				int tid = 0;
-				CMS_Simint_computeDFShellQuartet(
-					simint, tid, M, N, P,
-					&integrals, &nints
-				);
-				
-				if (nints == 0) continue;  // Shell quartet is screened
-				
-				int startP = df_shell_bf_sind[P];
-				int dimP   = df_shell_bf_sind[P + 1] - startP;
-				size_t row_mem_size = sizeof(double) * dimP;
-				
-				for (int iM = startM; iM < endM; iM++)
+				int im = iM - startM;
+				for (int iN = startN; iN < endN; iN++)
 				{
-					int im = iM - startM;
-					for (int iN = startN; iN < endN; iN++)
-					{
-						int in = iN - startN;
-						double *eri_ptr = integrals + (im * dimN + in) * dimP;
-						double *pqA_ptr0 = pqA + (iM * nbf + iN) * df_nbf + startP;
-						double *pqA_ptr1 = pqA + (iN * nbf + iM) * df_nbf + startP;
-						memcpy(pqA_ptr0, eri_ptr, row_mem_size);
-						memcpy(pqA_ptr1, eri_ptr, row_mem_size);
-					}
+					int in = iN - startN;
+					double *eri_ptr = integrals + (im * dimN + in) * dimP;
+					double *pqA_ptr0 = pqA + (iM * nbf + iN) * df_nbf + startP;
+					double *pqA_ptr1 = pqA + (iN * nbf + iM) * df_nbf + startP;
+					memcpy(pqA_ptr0, eri_ptr, row_mem_size);
+					memcpy(pqA_ptr1, eri_ptr, row_mem_size);
 				}
-				
-			}  // for (int P = 0; P < df_nshell; P++)
-		}  // for (int N = i; N < nshell; N++)
-	}  // for (int M = 0; M < nshell; M++)
+			}
+			
+		}  // for (int P = 0; P < df_nshell; P++)
+	}  // for (int iMN = 0; iMN < TinySCF->num_uniq_sp; iMN++)
 	et = get_wtime_sec();
 	printf("* TinySCF 3-center integral : %.3lf (s)\n", et - st);
 	
@@ -82,8 +93,12 @@ void TinySCF_build_DF_tensor(TinySCF_t TinySCF)
 	st = get_wtime_sec();
 	for (int M = 0; M < df_nshell; M++)
 	{
+		double scrval0 = df_sp_scrval[M];
 		for (int N = M; N < df_nshell; N++)
 		{
+			double scrval1 = df_sp_scrval[N];
+			if (scrval0 * scrval1 < scrtol2) continue;
+			
 			double *integrals;
 			int nints;
 			int tid = 0;
@@ -92,7 +107,8 @@ void TinySCF_build_DF_tensor(TinySCF_t TinySCF)
 				&integrals, &nints
 			);
 			
-			if (nints == 0) continue;  // Shell quartet is screened
+			// if (nints == 0) continue;  // Shell quartet is screened
+			assert(nints > 0);
 			
 			int startM = df_shell_bf_sind[M];
 			int endM   = df_shell_bf_sind[M + 1];

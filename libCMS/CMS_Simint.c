@@ -673,3 +673,10 @@ CMS_Simint_computeDFShellPair(
 
     return CMS_STATUS_SUCCESS;
 }
+
+double CMS_Simint_getDFShellpairScreenVal(Simint_t simint, int i)
+{
+	struct simint_multi_shellpair *pair;
+	pair = &simint->df_shellpairs[i];
+	return pair->screen_max;
+}

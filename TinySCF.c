@@ -86,9 +86,11 @@ void init_TinySCF(TinySCF_t TinySCF, char *bas_fname, char *df_bas_fname, char *
 	// Set screening thresholds, allocate memory for shell quartet screening 
 	TinySCF->shell_scrtol2 = 1e-11 * 1e-11;
 	TinySCF->sp_scrval     = (double*) ALIGN64B_MALLOC(DBL_SIZE * TinySCF->nshellpairs);
+	TinySCF->df_sp_scrval  = (double*) ALIGN64B_MALLOC(DBL_SIZE * TinySCF->df_nshells);
 	TinySCF->uniq_sp_lid   = (int*)    ALIGN64B_MALLOC(INT_SIZE * TinySCF->num_uniq_sp);
 	TinySCF->uniq_sp_rid   = (int*)    ALIGN64B_MALLOC(INT_SIZE * TinySCF->num_uniq_sp);
 	assert(TinySCF->sp_scrval     != NULL);
+	assert(TinySCF->df_sp_scrval  != NULL);
 	assert(TinySCF->uniq_sp_lid   != NULL);
 	assert(TinySCF->uniq_sp_rid   != NULL);
 	TinySCF->mem_size += (double) (DBL_SIZE * TinySCF->nshellpairs);
@@ -431,12 +433,22 @@ void TinySCF_compute_sq_Schwarz_scrvals(TinySCF_t TinySCF)
 	}
 	TinySCF->max_scrval = global_max_scrval;
 	
+	// Find the maximum screen value in density fitting shell pairs
+	double global_max_df_scrval = 0;
+	for (int i = 0; i < TinySCF->df_nshells; i++)
+	{
+		double df_scrval = CMS_Simint_getDFShellpairScreenVal(TinySCF->simint, i);
+		TinySCF->df_sp_scrval[i] = df_scrval;
+		if (df_scrval > global_max_df_scrval) 
+			global_max_df_scrval = df_scrval;
+	}
+	
 	// Reset Simint statistic info
 	CMS_Simint_resetStatisInfo(TinySCF->simint);
 	
 	// Generate unique shell pairs that survive Schwarz screening
 	// eta is the threshold for screening a shell pair
-	double eta = TinySCF->shell_scrtol2 / TinySCF->max_scrval;
+	double eta = TinySCF->shell_scrtol2 / global_max_df_scrval;
 	int nnz = 0;
 	for (int M = 0; M < TinySCF->nshells; M++)
 	{
@@ -449,7 +461,7 @@ void TinySCF_compute_sq_Schwarz_scrvals(TinySCF_t TinySCF)
 			{
 				// Make {N_i} in (M, N_i) as continuous as possible to get better
 				// memory access pattern and better performance
-				if (N > M) continue;
+				if (N < M) continue;
 				
 				// We want AM(M) >= AM(N) to avoid HRR
 				int MN_id = CMS_Simint_getShellpairAMIndex(TinySCF->simint, M, N);
