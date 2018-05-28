@@ -170,7 +170,7 @@ CMSStatus_t CMS_createSimint(BasisSet_t basis, BasisSet_t df_basis, Simint_t *si
 	s->df_shellpairs = (struct simint_multi_shellpair *) malloc(sizeof(struct simint_multi_shellpair) * df_basis->nshells);
 	CMS_ASSERT(s->df_shellpairs != NULL);
 	s->shellpair_memsize += (double) sizeof(struct simint_multi_shellpair) * df_basis->nshells;
-	int unit_shell_id = df_basis->nshells + 1;
+	int unit_shell_id = df_basis->nshells;
 	for (int i = 0; i < df_basis->nshells; i++)
 	{
 		struct simint_multi_shellpair *pair;
@@ -260,6 +260,8 @@ CMSStatus_t CMS_destroySimint(Simint_t simint, int show_stat)
     // Free memory
     free(simint->shellpairs);
     free(simint->shells);
+	free(simint->df_shellpairs);
+	free(simint->df_shells);
     _mm_free(simint->workbuf);
     _mm_free(simint->outbuf);
     free(simint->num_multi_shellpairs);
@@ -538,4 +540,134 @@ void CMS_Simint_resetStatisInfo(Simint_t simint)
     memset(simint->num_unscreened_prim,  0, stat_info_size);
     memset(simint->num_screened_vec,     0, stat_info_size);
     memset(simint->num_unscreened_vec,   0, stat_info_size);
+}
+
+
+// Compute density fitting 3-center integrals 
+CMSStatus_t
+CMS_Simint_computeDFShellQuartet(
+	Simint_t simint, int tid, int M, int N, int P,
+	double **integrals, int *nints
+)
+{
+    double setup_start, setup_end, ostei_start, ostei_end;
+    
+    int size, ret;
+    struct simint_multi_shellpair *bra_pair_p;
+    struct simint_multi_shellpair *ket_pair_p;
+
+    if (tid == 0) setup_start = CMS_get_walltime_sec();
+
+    bra_pair_p = &simint->shellpairs[M * simint->nshells + N];
+    ket_pair_p = &simint->df_shellpairs[P];
+    
+    simint->num_multi_shellpairs[tid] += 1.0;
+    simint->sum_nprim[tid] += (double) ket_pair_p->nprim;
+
+    if (tid == 0) 
+    {
+        setup_end   = CMS_get_walltime_sec();
+        ostei_start = CMS_get_walltime_sec();
+    }
+    
+    ret = simint_compute_eri(
+        bra_pair_p, ket_pair_p, simint->screen_tol,
+        &simint->workbuf[tid * simint->workmem_per_thread],
+        &simint->outbuf [tid * simint->outmem_per_thread]
+    );
+    
+    if (tid == 0) ostei_end = CMS_get_walltime_sec();
+    
+    if (ret < 0) 
+    {
+        size = 0; // Return zero size to caller; output buffer is not initialized
+    } else {
+        CMS_ASSERT(ret == 1); // Single shell quartet
+        struct simint_shell *shells = simint->shells;
+		struct simint_shell *df_shells = simint->df_shells;
+        size = (shells[M].am+1)*(shells[M].am+2)/2 *
+               (shells[N].am+1)*(shells[N].am+2)/2 *
+               (df_shells[P].am+1)*(df_shells[P].am+2)/2;
+    }
+
+    *integrals = &simint->outbuf[tid * simint->outmem_per_thread];
+    *nints = size;
+    
+    double *prim_screen_stat_info = *integrals + size;
+    simint->num_unscreened_prim[tid] += prim_screen_stat_info[0];
+    simint->num_screened_prim[tid]   += prim_screen_stat_info[1];
+    simint->num_unscreened_vec[tid]  += prim_screen_stat_info[2];
+    simint->num_screened_vec[tid]    += prim_screen_stat_info[3];
+
+    if (tid == 0)
+    {
+        simint->ostei_setup  += setup_end - setup_start;
+        simint->ostei_actual += ostei_end - ostei_start;
+    }
+
+    return CMS_STATUS_SUCCESS;
+}
+
+// Compute density fitting 2-center integrals 
+CMSStatus_t
+CMS_Simint_computeDFShellPair(
+	Simint_t simint, int tid, int M, int N,
+	double **integrals, int *nints
+)
+{
+    double setup_start, setup_end, ostei_start, ostei_end;
+    
+    int size, ret;
+    struct simint_multi_shellpair *bra_pair_p;
+    struct simint_multi_shellpair *ket_pair_p;
+
+    if (tid == 0) setup_start = CMS_get_walltime_sec();
+
+    bra_pair_p = &simint->df_shellpairs[M];
+    ket_pair_p = &simint->df_shellpairs[N];
+    
+    simint->num_multi_shellpairs[tid] += 1.0;
+    simint->sum_nprim[tid] += (double) ket_pair_p->nprim;
+
+    if (tid == 0) 
+    {
+        setup_end   = CMS_get_walltime_sec();
+        ostei_start = CMS_get_walltime_sec();
+    }
+    
+    ret = simint_compute_eri(
+        bra_pair_p, ket_pair_p, simint->screen_tol,
+        &simint->workbuf[tid * simint->workmem_per_thread],
+        &simint->outbuf [tid * simint->outmem_per_thread]
+    );
+    
+    if (tid == 0) ostei_end = CMS_get_walltime_sec();
+    
+    if (ret < 0) 
+    {
+        size = 0; // Return zero size to caller; output buffer is not initialized
+    } else {
+        CMS_ASSERT(ret == 1); // Single shell quartet
+        struct simint_shell *shells = simint->shells;
+		struct simint_shell *df_shells = simint->df_shells;
+        size = (df_shells[M].am+1)*(df_shells[M].am+2)/2 *
+               (df_shells[N].am+1)*(df_shells[N].am+2)/2;
+    }
+
+    *integrals = &simint->outbuf[tid * simint->outmem_per_thread];
+    *nints = size;
+    
+    double *prim_screen_stat_info = *integrals + size;
+    simint->num_unscreened_prim[tid] += prim_screen_stat_info[0];
+    simint->num_screened_prim[tid]   += prim_screen_stat_info[1];
+    simint->num_unscreened_vec[tid]  += prim_screen_stat_info[2];
+    simint->num_screened_vec[tid]    += prim_screen_stat_info[3];
+
+    if (tid == 0)
+    {
+        simint->ostei_setup  += setup_end - setup_start;
+        simint->ostei_actual += ostei_end - ostei_start;
+    }
+
+    return CMS_STATUS_SUCCESS;
 }

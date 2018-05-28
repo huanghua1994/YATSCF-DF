@@ -13,7 +13,7 @@ LIBS    = ${BLAS_LIBS} ${LIBCMS_LIBFILE} ${LIBSIMINT}
 CFLAGS  = -Wall -g -O3 -qopenmp -std=gnu99 -xHost
 LDFLAGS = -L${LIBCMS_LIBFILE} -lpthread -qopenmp
 
-OBJS = utils.o build_density.o shell_quartet_list.o Accum_Fock.o build_Fock.o DIIS.o TinySCF.o main.o 
+OBJS = utils.o build_density.o shell_quartet_list.o Accum_Fock.o build_Fock.o DIIS.o build_DF_tensor.o TinySCF.o main.o 
 
 $(EXE): Makefile $(OBJS) ${LIBCMS_LIBFILE} ${LIBSIMINT}
 	$(CC) ${CFLAGS} ${LDFLAGS} $(OBJS) -o $(EXE) ${LIBS}
@@ -36,6 +36,9 @@ build_Fock.o: Makefile build_Fock.c build_Fock.h TinySCF.h shell_quartet_list.h
 DIIS.o: Makefile DIIS.c DIIS.h TinySCF.h
 	$(CC) ${CFLAGS} ${INCS} -c DIIS.c -o $@ 
 
+build_DF_tensor.o: Makefile build_DF_tensor.c build_DF_tensor.h TinySCF.h
+	$(CC) ${CFLAGS} ${INCS} ${BLAS_LIBS} -c build_DF_tensor.c -o $@ 
+	
 TinySCF.o: Makefile TinySCF.c TinySCF.h utils.h
 	$(CC) ${CFLAGS} ${INCS} ${BLAS_LIBS} -c TinySCF.c -o $@ 
 	

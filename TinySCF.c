@@ -12,6 +12,7 @@
 #include "utils.h"
 #include "TinySCF.h"
 #include "build_Fock.h"
+#include "build_DF_tensor.h"
 #include "build_density.h"
 #include "DIIS.h"
 
@@ -118,7 +119,7 @@ void init_TinySCF(TinySCF_t TinySCF, char *bas_fname, char *df_bas_fname, char *
 		TinySCF->df_shell_bf_sind[i] = CMS_getFuncStartInd(TinySCF->df_basis, i);
 		TinySCF->df_shell_bf_num[i]  = CMS_getShellDim    (TinySCF->df_basis, i);
 	}
-	TinySCF->df_shell_bf_sind[TinySCF->nshells] = TinySCF->df_nbf;
+	TinySCF->df_shell_bf_sind[TinySCF->df_nshells] = TinySCF->df_nbf;
 	
 	// Allocate memory for matrices and temporary arrays used in SCF
 	size_t mat_mem_size    = DBL_SIZE * TinySCF->mat_size;
@@ -209,6 +210,17 @@ void init_TinySCF(TinySCF_t TinySCF, char *bas_fname, char *df_bas_fname, char *
 		TinySCF->B_mat[i * (MAX_DIIS + 1) + i] = 0.0;
 	TinySCF->DIIS_bmax_id = 0;
 	TinySCF->DIIS_bmax    = -DBL_MAX;
+	
+	// Allocate memory for density fitting tensors and buffers
+	int tensor_memsize = DBL_SIZE * TinySCF->mat_size * TinySCF->df_nbf;
+	TinySCF->pqA       = (double*) ALIGN64B_MALLOC(tensor_memsize);
+	TinySCF->df_tensor = (double*) ALIGN64B_MALLOC(tensor_memsize);
+	TinySCF->Jpq       = (double*) ALIGN64B_MALLOC(DBL_SIZE * TinySCF->df_nbf * TinySCF->df_nbf);
+	assert(TinySCF->pqA       != NULL);
+	assert(TinySCF->df_tensor != NULL);
+	assert(TinySCF->Jpq       != NULL);
+	TinySCF->mem_size += (double) tensor_memsize * 2;
+	TinySCF->mem_size += (double) DBL_SIZE * TinySCF->df_nbf * TinySCF->df_nbf;
 	
 	double et = get_wtime_sec();
 	TinySCF->init_time = et - st;
@@ -500,6 +512,8 @@ static void TinySCF_calc_energy(TinySCF_t TinySCF)
 
 void TinySCF_do_SCF(TinySCF_t TinySCF)
 {
+	TinySCF_build_DF_tensor(TinySCF);
+	
 	// Start SCF iterations
 	printf("TinySCF SCF iteration started...\n");
 	printf("Nuclear energy = %.10lf\n", TinySCF->nuc_energy);

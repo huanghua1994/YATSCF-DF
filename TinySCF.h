@@ -63,6 +63,10 @@ struct TinySCF_struct
 	int    *ev_idx;         // Index of eigenvalues, for sorting
 	double *tmp_mat;        // Temporary matrix
 	
+	// Density fitting tensors and buffers
+	double *pqA, *Jpq, *df_tensor;
+	double *temp_J, *temp_K; 
+	
 	// Blocked J, K and D matrices and the offsets of each block
 	double *J_mat_block;  
 	double *K_mat_block;

@@ -102,6 +102,20 @@ CMS_computeShellQuartetBatch_Simint(
 
 void CMS_Simint_resetStatisInfo(Simint_t simint);
 
+// Compute density fitting 3-center integrals 
+CMSStatus_t
+CMS_Simint_computeDFShellQuartet(
+	Simint_t simint, int tid, int M, int N, int P,
+	double **integrals, int *nints
+);
+
+// Compute density fitting 2-center integrals 
+CMSStatus_t
+CMS_Simint_computeDFShellPair(
+	Simint_t simint, int tid, int M, int N,
+	double **integrals, int *nints
+);
+
 #ifdef __cplusplus
 }
 #endif
