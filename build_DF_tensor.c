@@ -49,8 +49,9 @@ void TinySCF_build_DF_tensor(TinySCF_t TinySCF)
 		int dimN   = endN - startN;
 		double scrval0 = sp_scrval[M * nshell + N];
 		
-		for (int P = 0; P < df_nshell; P++)
+		for (int iP = 0; iP < df_nshell; iP++)
 		{
+			int P = simint->df_am_shell_id[iP];
 			double scrval1 = df_sp_scrval[P];
 			if (scrval0 * scrval1 < scrtol2) continue;
 			
@@ -102,10 +103,7 @@ void TinySCF_build_DF_tensor(TinySCF_t TinySCF)
 			double *integrals;
 			int nints;
 			int tid = 0;
-			CMS_Simint_computeDFShellPair(
-				simint, tid, M, N, 
-				&integrals, &nints
-			);
+			CMS_Simint_computeDFShellPair(simint, tid, M, N, &integrals, &nints);
 			
 			// if (nints == 0) continue;  // Shell quartet is screened
 			assert(nints > 0);

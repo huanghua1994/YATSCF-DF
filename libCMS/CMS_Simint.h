@@ -33,9 +33,12 @@ struct Simint
     struct simint_shell *shells;
     struct simint_multi_shellpair *shellpairs;
 	
-	int df_nshells;
+	int df_nshells, df_max_am;
 	struct simint_shell *df_shells;
 	struct simint_multi_shellpair *df_shellpairs;
+	int *df_am_shell_id;
+	int *df_am_shell_spos;
+	int *df_am_shell_num;
 
     int    screen_method;
     double screen_tol;
