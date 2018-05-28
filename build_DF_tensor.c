@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <math.h>
 #include <omp.h>
 
 #include <mkl.h>
@@ -12,18 +13,24 @@
 
 void TinySCF_build_DF_tensor(TinySCF_t TinySCF)
 {
-	double *pqA = TinySCF->pqA;
-	double *Jpq = TinySCF->Jpq;
-	double *df_tensor = TinySCF->df_tensor;
-	int nbf    = TinySCF->nbasfuncs;
-	int df_nbf = TinySCF->df_nbf;
-	int nshell    = TinySCF->nshells;
-	int df_nshell = TinySCF->df_nshells;
+	double *pqA           = TinySCF->pqA;
+	double *Jpq           = TinySCF->Jpq;
+	double *df_tensor     = TinySCF->df_tensor;
+	int nbf               = TinySCF->nbasfuncs;
+	int df_nbf            = TinySCF->df_nbf;
+	int nshell            = TinySCF->nshells;
+	int df_nshell         = TinySCF->df_nshells;
 	int *shell_bf_sind    = TinySCF->shell_bf_sind;
 	int *df_shell_bf_sind = TinySCF->df_shell_bf_sind;
-	Simint_t simint = TinySCF->simint;
+	Simint_t simint       = TinySCF->simint;
 	
+	double st, et;
+
+	printf("---------- DF tensor construction ----------\n");
+
 	// Calculate 3-center density fitting integrals
+	// UNDONE: (1) parallelize; (2) batching
+	st = get_wtime_sec();
 	for (int M = 0; M < nshell; M++)
 	{
 		for (int N = M; N < nshell; N++)
@@ -67,9 +74,12 @@ void TinySCF_build_DF_tensor(TinySCF_t TinySCF)
 			}  // for (int P = 0; P < df_nshell; P++)
 		}  // for (int N = i; N < nshell; N++)
 	}  // for (int M = 0; M < nshell; M++)
+	et = get_wtime_sec();
+	printf("* TinySCF 3-center integral : %.3lf (s)\n", et - st);
 	
 	// Calculate the Coulomb metric matrix
-	double tmp1 = 0;
+	// UNDONE: (1) parallelize; (2) batching
+	st = get_wtime_sec();
 	for (int M = 0; M < df_nshell; M++)
 	{
 		for (int N = M; N < df_nshell; N++)
@@ -102,4 +112,62 @@ void TinySCF_build_DF_tensor(TinySCF_t TinySCF)
 			}
 		}  // for (int N = i; N < df_nshell; N++)
 	}  // for (int M = 0; M < df_nshell; M++)
+	et = get_wtime_sec();
+	printf("* TinySCF 2-center integral : %.3lf (s)\n", et - st);
+
+	// Factorize the Jpq
+	st = get_wtime_sec();
+	size_t df_mat_mem_size = DBL_SIZE * df_nbf * df_nbf;
+	double *tmp_mat0  = ALIGN64B_MALLOC(df_mat_mem_size);
+	double *tmp_mat1  = ALIGN64B_MALLOC(df_mat_mem_size);
+	double *df_eigval = ALIGN64B_MALLOC(DBL_SIZE * df_nbf);
+	assert(tmp_mat0 != NULL && tmp_mat1 != NULL);
+	// Diagonalize Jpq = U * S * U^T, the eigenvectors are stored in tmp_mat0
+	memcpy(tmp_mat0, Jpq, df_mat_mem_size);
+	LAPACKE_dsyev(LAPACK_ROW_MAJOR, 'V', 'U', df_nbf, tmp_mat0, df_nbf, df_eigval);
+	// Apply inverse square root to eigen values to get the inverse squart root of Jpq
+	for (int i = 0; i < df_nbf; i++)
+		df_eigval[i] = 1.0 / sqrt(df_eigval[i]);
+	// Right multiply the S^{-1/2} to U
+	memcpy(tmp_mat1, tmp_mat0, df_mat_mem_size);
+	for (int irow = 0; irow < df_nbf; irow++)
+	{
+		double *tmp_mat0_ptr = tmp_mat0 + irow * df_nbf;
+		for (int icol = 0; icol < df_nbf; icol++)
+			tmp_mat0_ptr[icol] *= df_eigval[icol];
+	}
+	// Get Jpq^{-1/2} = U * S^{-1/2} * U', Jpq^{-1/2} is stored in Jpq
+	cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasTrans, df_nbf, df_nbf, df_nbf, 
+				1.0, tmp_mat0, df_nbf, tmp_mat1, df_nbf, 0.0, Jpq, df_nbf);
+	ALIGN64B_FREE(tmp_mat0);
+	ALIGN64B_FREE(tmp_mat1);
+	ALIGN64B_FREE(df_eigval);
+	et = get_wtime_sec();
+	printf("* TinySCF matrix inv-sqrt   : %.3lf (s)\n", et - st);
+
+	// Form the density fitting tensor
+	// UNDONE: (1) parallelize; (2) use dgemm
+	st = get_wtime_sec();
+	memset(df_tensor, 0, DBL_SIZE * nbf * nbf * df_nbf);
+	for (int M = 0; M < nbf; M++)
+	{
+		for (int N = M; N < nbf; N++)
+		{
+			double *pqA_ptr = pqA + (M * nbf + N) * df_nbf;
+			double *df_tensor_MN = df_tensor + (M * nbf + N) * df_nbf;
+			double *df_tensor_NM = df_tensor + (N * nbf + M) * df_nbf;
+
+			for (int irow = 0; irow < df_nbf; irow++)
+			{
+				double *Jpq_ptr = Jpq + irow * df_nbf;
+				double pqA_k = pqA_ptr[irow];
+				for (int icol = 0; icol < df_nbf; icol++)
+					df_tensor_MN[icol] += pqA_k * Jpq_ptr[icol];
+			}
+		}
+	}
+	et = get_wtime_sec();
+	printf("* TinySCF build DF tensor   : %.3lf (s)\n", et - st);
+
+	printf("---------- DF tensor construction finished ----------\n");
 }
