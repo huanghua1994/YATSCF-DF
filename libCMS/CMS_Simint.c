@@ -45,6 +45,8 @@ CMSStatus_t CMS_createSimint(BasisSet_t basis, BasisSet_t df_basis, Simint_t *si
     // Allocate workbuf for all threads on this node
     s->nthreads = nthreads;
     s->max_am = basis->max_momentum;
+    if (df_basis->max_momentum > s->max_am)   // should be the larger one
+        s->max_am = df_basis->max_momentum;
     s->workmem_per_thread = simint_ostei_workmem(0, s->max_am);
     s->workmem_per_thread = (s->workmem_per_thread + 7) / 8 * 8;  // Align to 8 double (64 bytes)
     s->workbuf = (double *) _mm_malloc(s->workmem_per_thread*nthreads*sizeof(double), 64);
@@ -580,7 +582,7 @@ CMS_Simint_computeDFShellQuartet(
     
     if (ret < 0) 
     {
-        size = 0; // Return zero size to caller; output buffer is not initialized
+        size = 0; // Return zero size to caller; shell quartet is screened 
     } else {
         CMS_ASSERT(ret == 1); // Single shell quartet
         struct simint_shell *shells = simint->shells;
@@ -645,7 +647,7 @@ CMS_Simint_computeDFShellPair(
     
     if (ret < 0) 
     {
-        size = 0; // Return zero size to caller; output buffer is not initialized
+        size = 0; // Return zero size to caller; shell quartet is screened 
     } else {
         CMS_ASSERT(ret == 1); // Single shell quartet
         struct simint_shell *shells = simint->shells;

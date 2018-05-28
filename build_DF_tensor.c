@@ -51,7 +51,7 @@ void TinySCF_build_DF_tensor(TinySCF_t TinySCF)
 					&integrals, &nints
 				);
 				
-				assert(nints > 0);
+				if (nints == 0) continue;  // Shell quartet is screened
 				
 				int startP = df_shell_bf_sind[P];
 				int dimP   = df_shell_bf_sind[P + 1] - startP;
@@ -91,6 +91,8 @@ void TinySCF_build_DF_tensor(TinySCF_t TinySCF)
 				simint, tid, M, N, 
 				&integrals, &nints
 			);
+			
+			if (nints == 0) continue;  // Shell quartet is screened
 			
 			int startM = df_shell_bf_sind[M];
 			int endM   = df_shell_bf_sind[M + 1];
