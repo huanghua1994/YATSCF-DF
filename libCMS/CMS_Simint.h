@@ -63,31 +63,28 @@ CMSStatus_t CMS_createSimint(BasisSet_t basis, BasisSet_t df_basis, Simint_t *si
 CMSStatus_t CMS_destroySimint(Simint_t simint, int show_stat);
 
 CMSStatus_t
-CMS_computeShellQuartet_Simint(Simint_t simint, int tid,
-                                int A, int B, int C, int D,
-                                double **integrals, int *nints);
+CMS_computeShellQuartet_Simint(
+	Simint_t simint, int tid, int A, int B, int C, 
+	int D, double **integrals, int *nints
+);
 
 CMSStatus_t
-CMS_computePairOvl_Simint(BasisSet_t basis, Simint_t simint, int tid,
-                           int A, int B,
-                           double **integrals, int *nints);
+CMS_computePairOvl_Simint(
+	BasisSet_t basis, Simint_t simint, int tid,
+	int A, int B, double **integrals, int *nints
+);
 
 CMSStatus_t
-CMS_computePairCoreH_Simint(BasisSet_t basis, Simint_t simint, int tid,
-                           int A, int B,
-                           double **integrals, int *nints);
+CMS_computePairCoreH_Simint(
+	BasisSet_t basis, Simint_t simint, int tid,
+	int A, int B, double **integrals, int *nints
+);
 
-
-// The following 2 constants are corresponding to Simint_OSTEI_MAXAM
-// and Simint_NSHELL_SIMD in Simint. I cannot include <simint/simint.h>
-// here, so I just update the values manually. This problem should be 
-// solved later.
+// The following 2 constants are corresponding to Simint_OSTEI_MAXAM and
+// Simint_NSHELL_SIMD in Simint. I cannot include <simint/simint.h> here, 
+// so I just update the values manually. This problem should be solved later.
 #define _Simint_OSTEI_MAXAM 4
 #define _Simint_NSHELL_SIMD 16
-
-#define _Simint_AM_PAIRS (((_Simint_OSTEI_MAXAM) + 1) * ((_Simint_OSTEI_MAXAM) + 1))
-
-void CMS_Simint_addupdateFtimer(Simint_t simint, double sec);
 
 int  CMS_Simint_getShellpairAMIndex(Simint_t simint, int P, int Q);
 
@@ -95,21 +92,14 @@ void CMS_Simint_createThreadMultishellpair(void **thread_multi_shellpair);
 
 void CMS_Simint_freeThreadMultishellpair(void **thread_multi_shellpair);
 
-CMSStatus_t 
-CMS_computeShellQuartetBatch_Simint(
-    Simint_t simint, int tid,
-    int M, int N, int *P_list, int *Q_list,
-    int npair, double **thread_batch_integrals, int *thread_batch_nints,
-    void **thread_multi_shellpairs
-);
-
 void CMS_Simint_resetStatisInfo(Simint_t simint);
 
-// Compute density fitting 3-center integrals 
+// Compute batched density fitting 3-center integrals 
 CMSStatus_t
-CMS_Simint_computeDFShellQuartet(
-	Simint_t simint, int tid, int M, int N, int P,
-	double **integrals, int *nints
+CMS_Simint_computeDFShellQuartetBatch(
+	Simint_t simint, int tid, int M, int N, int *P_list, int npairs, 
+	double **thread_batch_integrals, int *thread_batch_nints,
+	void **thread_multi_shellpair
 );
 
 // Compute density fitting 2-center integrals 
@@ -120,6 +110,28 @@ CMS_Simint_computeDFShellPair(
 );
 
 double CMS_Simint_getDFShellpairScreenVal(Simint_t simint, int i);
+
+// ========== The following functions are not used currently ========== //
+
+#define _Simint_AM_PAIRS (((_Simint_OSTEI_MAXAM) + 1) * ((_Simint_OSTEI_MAXAM) + 1))
+
+void CMS_Simint_addupdateFtimer(Simint_t simint, double sec);
+
+// Compute density fitting 3-center integrals 
+CMSStatus_t
+CMS_Simint_computeDFShellQuartet(
+	Simint_t simint, int tid, int M, int N, int P,
+	double **integrals, int *nints
+);
+
+// Compute batched 4-center ERIs
+CMSStatus_t 
+CMS_computeShellQuartetBatch_Simint(
+    Simint_t simint, int tid,
+    int M, int N, int *P_list, int *Q_list,
+    int npair, double **thread_batch_integrals, int *thread_batch_nints,
+    void **thread_multi_shellpairs
+);
 
 #ifdef __cplusplus
 }
