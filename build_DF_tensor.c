@@ -235,21 +235,22 @@ static void generate_df_tensor(TinySCF_t TinySCF)
 	int df_nbf  = TinySCF->df_nbf;
 	
 	memset(df_tensor, 0, DBL_SIZE * nbf * nbf * df_nbf);
+	
+	for (int M = 0; M < nbf; M++)
+	{
+		double *pqA_ptr = pqA + (M * nbf + M) * df_nbf;
+		double *df_tensor_MM = df_tensor + (M * nbf + M) * df_nbf;
+		cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, nbf - M, df_nbf, df_nbf,
+		            1.0, pqA_ptr, df_nbf, Jpq, df_nbf, 0.0, df_tensor_MM, df_nbf);
+	}
+	
+	#pragma omp parallel for schedule(dynamic)
 	for (int M = 0; M < nbf; M++)
 	{
 		for (int N = M; N < nbf; N++)
 		{
-			double *pqA_ptr = pqA + (M * nbf + N) * df_nbf;
 			double *df_tensor_MN = df_tensor + (M * nbf + N) * df_nbf;
 			double *df_tensor_NM = df_tensor + (N * nbf + M) * df_nbf;
-
-			for (int irow = 0; irow < df_nbf; irow++)
-			{
-				double *Jpq_ptr = Jpq + irow * df_nbf;
-				double pqA_k = pqA_ptr[irow];
-				for (int icol = 0; icol < df_nbf; icol++)
-					df_tensor_MN[icol] += pqA_k * Jpq_ptr[icol];
-			}
 			memcpy(df_tensor_NM, df_tensor_MN, DBL_SIZE * df_nbf);
 		}
 	}
