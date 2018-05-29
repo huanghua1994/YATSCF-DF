@@ -214,15 +214,18 @@ void init_TinySCF(TinySCF_t TinySCF, char *bas_fname, char *df_bas_fname, char *
 	TinySCF->DIIS_bmax    = -DBL_MAX;
 	
 	// Allocate memory for density fitting tensors and buffers
-	int tensor_memsize = DBL_SIZE * TinySCF->mat_size * TinySCF->df_nbf;
+	size_t tensor_memsize = (size_t) TinySCF->mat_size * (size_t) TinySCF->df_nbf;
+	size_t df_mat_memsize = (size_t) TinySCF->df_nbf * (size_t) TinySCF->df_nbf;
+	tensor_memsize *= DBL_SIZE;
+	df_mat_memsize *= DBL_SIZE;
 	TinySCF->pqA       = (double*) ALIGN64B_MALLOC(tensor_memsize);
 	TinySCF->df_tensor = (double*) ALIGN64B_MALLOC(tensor_memsize);
-	TinySCF->Jpq       = (double*) ALIGN64B_MALLOC(DBL_SIZE * TinySCF->df_nbf * TinySCF->df_nbf);
+	TinySCF->Jpq       = (double*) ALIGN64B_MALLOC(df_mat_memsize);
 	assert(TinySCF->pqA       != NULL);
 	assert(TinySCF->df_tensor != NULL);
 	assert(TinySCF->Jpq       != NULL);
 	TinySCF->mem_size += (double) tensor_memsize * 2;
-	TinySCF->mem_size += (double) DBL_SIZE * TinySCF->df_nbf * TinySCF->df_nbf;
+	TinySCF->mem_size += (double) df_mat_memsize;
 	// Jpq and pqA is no longer needed after df_tensor is generated,
 	// use them as the buffer for Fock build
 	TinySCF->temp_J = TinySCF->Jpq;
