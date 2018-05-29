@@ -31,7 +31,7 @@ Accum_Fock.o: Makefile Accum_Fock.h Accum_Fock.c TinySCF.h
 	$(CC) ${CFLAGS} ${INCS} -c Accum_Fock.c -o $@ 
 
 build_Fock.o: Makefile build_Fock.c build_Fock.h TinySCF.h shell_quartet_list.h
-	$(CC) ${CFLAGS} ${INCS} -c build_Fock.c -o $@ 
+	$(CC) ${CFLAGS} ${INCS} ${BLAS_LIBS} -c build_Fock.c -o $@ 
 
 DIIS.o: Makefile DIIS.c DIIS.h TinySCF.h
 	$(CC) ${CFLAGS} ${INCS} -c DIIS.c -o $@ 

@@ -226,6 +226,7 @@ static void calc_inverse_sqrt_Jpq(TinySCF_t TinySCF)
 	ALIGN64B_FREE(df_eigval);
 }
 
+// Formula: df_tensor(i, j, k) = dot(pqA(i, j, 1:df_nbf), Jpq_invsqrt(1:df_nbf, k))
 static void generate_df_tensor(TinySCF_t TinySCF)
 {
 	double *df_tensor = TinySCF->df_tensor;

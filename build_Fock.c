@@ -4,6 +4,8 @@
 #include <math.h>
 #include <omp.h>
 
+#include <mkl.h>
+
 #include "utils.h"
 #include "TinySCF.h"
 #include "build_Fock.h"
@@ -83,20 +85,13 @@ void TinySCF_build_FockMat(TinySCF_t TinySCF)
 
 	// Generate the temporary tensor for K matrix and form K matrix
 	// High flop-per-byte ratio: access: nbf^2 * (2*df_nbf+1), compute: nbf^3 * df_nbf
-	for (int k = 0; k < nbf; k++)
+	// Formula: temp_K(k, j, p) = dot(D_mat(k, 1:nbf), df_tensor(1:nbf, j, p))
+	for (int j = 0; j < nbf; j++)
 	{
-		for (int j = 0; j < nbf; j++)
-		{
-			for (int l = 0; l < nbf; l++)
-			{
-				double D_lk = D_mat[k * nbf + l];
-				double *temp_K_row = temp_K + (k * nbf + j) * df_nbf;
-				double *df_tensor_row = df_tensor + (l * nbf + j) * df_nbf;
-				#pragma simd
-				for (int p = 0; p < df_nbf; p++)
-					temp_K_row[p] += D_lk * df_tensor_row[p];
-			}
-		}
+		double *temp_K_j    = temp_K    + j * df_nbf;
+		double *df_tensor_j = df_tensor + j * df_nbf;
+		cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, nbf, df_nbf, nbf, 
+		            1.0, D_mat, nbf, df_tensor_j, nbf * df_nbf, 0.0, temp_K_j, nbf * df_nbf);
 	}
 
 	// Build K matrix
