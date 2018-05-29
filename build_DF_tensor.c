@@ -141,79 +141,64 @@ static void calc_DF_3center_integrals(TinySCF_t TinySCF)
 	free(P_lists);
 }
 
-void TinySCF_build_DF_tensor(TinySCF_t TinySCF)
+static void calc_DF_2center_integrals(TinySCF_t TinySCF)
 {
-	double *pqA           = TinySCF->pqA;
+	// Fast enough, need not to batch shell quartets
 	double *Jpq           = TinySCF->Jpq;
-	double *df_tensor     = TinySCF->df_tensor;
-	int nbf               = TinySCF->nbasfuncs;
 	int df_nbf            = TinySCF->df_nbf;
-	int nshell            = TinySCF->nshells;
 	int df_nshell         = TinySCF->df_nshells;
-	int *shell_bf_sind    = TinySCF->shell_bf_sind;
 	int *df_shell_bf_sind = TinySCF->df_shell_bf_sind;
 	Simint_t simint       = TinySCF->simint;
-	int *uniq_sp_lid      = TinySCF->uniq_sp_lid;
-	int *uniq_sp_rid      = TinySCF->uniq_sp_rid;
-	int num_uniq_sp       = TinySCF->num_uniq_sp;
-	double *sp_scrval     = TinySCF->sp_scrval;
 	double *df_sp_scrval  = TinySCF->df_sp_scrval;
 	double scrtol2        = TinySCF->shell_scrtol2;
 	
-	double st, et;
-
-	printf("---------- DF tensor construction ----------\n");
-
-	// Calculate 3-center density fitting integrals
-	st = get_wtime_sec();
-	calc_DF_3center_integrals(TinySCF);
-	et = get_wtime_sec();
-	printf("* TinySCF 3-center integral : %.3lf (s)\n", et - st);
-	
-	// Calculate the Coulomb metric matrix
-	// UNDONE: (1) parallelize; (2) batching
-	st = get_wtime_sec();
-	for (int M = 0; M < df_nshell; M++)
+	#pragma omp parallel
 	{
-		double scrval0 = df_sp_scrval[M];
-		for (int N = M; N < df_nshell; N++)
+		int tid = omp_get_thread_num();
+		int thread_nints;
+		double *thread_integrals;
+		
+		#pragma omp for schedule(dynamic)
+		for (int M = 0; M < df_nshell; M++)
 		{
-			double scrval1 = df_sp_scrval[N];
-			if (scrval0 * scrval1 < scrtol2) continue;
-			
-			double *integrals;
-			int nints;
-			int tid = 0;
-			CMS_Simint_computeDFShellPair(simint, tid, M, N, &integrals, &nints);
-			
-			// if (nints == 0) continue;  // Shell quartet is screened
-			assert(nints > 0);
-			
-			int startM = df_shell_bf_sind[M];
-			int endM   = df_shell_bf_sind[M + 1];
-			int startN = df_shell_bf_sind[N];
-			int endN   = df_shell_bf_sind[N + 1];
-			int dimM   = endM - startM;
-			int dimN   = endN - startN;
-			
-			for (int iM = startM; iM < endM; iM++)
+			double scrval0 = df_sp_scrval[M];
+			for (int N = M; N < df_nshell; N++)
 			{
-				int im = iM - startM;
-				for (int iN = startN; iN < endN; iN++)
-				{
-					int in = iN - startN;
-					double I = integrals[im * dimN + in];
-					Jpq[iM * df_nbf + iN] = I;
-					Jpq[iN * df_nbf + iM] = I;
-				}
-			}
-		}  // for (int N = i; N < df_nshell; N++)
-	}  // for (int M = 0; M < df_nshell; M++)
-	et = get_wtime_sec();
-	printf("* TinySCF 2-center integral : %.3lf (s)\n", et - st);
+				double scrval1 = df_sp_scrval[N];
+				if (scrval0 * scrval1 < scrtol2) continue;
 
-	// Factorize the Jpq
-	st = get_wtime_sec();
+				CMS_Simint_computeDFShellPair(simint, tid, M, N, &thread_integrals, &thread_nints);
+				
+				assert(thread_nints > 0);
+				
+				int startM = df_shell_bf_sind[M];
+				int endM   = df_shell_bf_sind[M + 1];
+				int startN = df_shell_bf_sind[N];
+				int endN   = df_shell_bf_sind[N + 1];
+				int dimM   = endM - startM;
+				int dimN   = endN - startN;
+				
+				for (int iM = startM; iM < endM; iM++)
+				{
+					int im = iM - startM;
+					for (int iN = startN; iN < endN; iN++)
+					{
+						int in = iN - startN;
+						double I = thread_integrals[im * dimN + in];
+						Jpq[iM * df_nbf + iN] = I;
+						Jpq[iN * df_nbf + iM] = I;
+					}
+				}
+			}  // for (int N = i; N < df_nshell; N++)
+		}  // for (int M = 0; M < df_nshell; M++)
+	}  // #pragma omp parallel
+}
+
+static void calc_inverse_sqrt_Jpq(TinySCF_t TinySCF)
+{
+	double *Jpq = TinySCF->Jpq;
+	int df_nbf  = TinySCF->df_nbf;
+	
 	size_t df_mat_mem_size = DBL_SIZE * df_nbf * df_nbf;
 	double *tmp_mat0  = ALIGN64B_MALLOC(df_mat_mem_size);
 	double *tmp_mat1  = ALIGN64B_MALLOC(df_mat_mem_size);
@@ -239,12 +224,16 @@ void TinySCF_build_DF_tensor(TinySCF_t TinySCF)
 	ALIGN64B_FREE(tmp_mat0);
 	ALIGN64B_FREE(tmp_mat1);
 	ALIGN64B_FREE(df_eigval);
-	et = get_wtime_sec();
-	printf("* TinySCF matrix inv-sqrt   : %.3lf (s)\n", et - st);
+}
 
-	// Form the density fitting tensor
-	// UNDONE: (1) parallelize; (2) use dgemm
-	st = get_wtime_sec();
+static void generate_df_tensor(TinySCF_t TinySCF)
+{
+	double *df_tensor = TinySCF->df_tensor;
+	double *pqA = TinySCF->pqA;
+	double *Jpq = TinySCF->Jpq;
+	int nbf     = TinySCF->nbasfuncs;
+	int df_nbf  = TinySCF->df_nbf;
+	
 	memset(df_tensor, 0, DBL_SIZE * nbf * nbf * df_nbf);
 	for (int M = 0; M < nbf; M++)
 	{
@@ -264,8 +253,38 @@ void TinySCF_build_DF_tensor(TinySCF_t TinySCF)
 			memcpy(df_tensor_NM, df_tensor_MN, DBL_SIZE * df_nbf);
 		}
 	}
+}
+
+void TinySCF_build_DF_tensor(TinySCF_t TinySCF)
+{
+	double st, et;
+
+	printf("---------- DF tensor construction ----------\n");
+
+	// Calculate 3-center density fitting integrals
+	st = get_wtime_sec();
+	calc_DF_3center_integrals(TinySCF);
 	et = get_wtime_sec();
-	printf("* TinySCF build DF tensor   : %.3lf (s)\n", et - st);
+	printf("* 3-center integral : %.3lf (s)\n", et - st);
+	
+	// Calculate the Coulomb metric matrix
+	st = get_wtime_sec();
+	calc_DF_2center_integrals(TinySCF);
+	et = get_wtime_sec();
+	printf("* 2-center integral : %.3lf (s)\n", et - st);
+
+	// Factorize the Jpq
+	st = get_wtime_sec();
+	calc_inverse_sqrt_Jpq(TinySCF);
+	et = get_wtime_sec();
+	printf("* matrix inv-sqrt   : %.3lf (s)\n", et - st);
+
+	// Form the density fitting tensor
+	// UNDONE: (1) parallelize; (2) use dgemm
+	st = get_wtime_sec();
+	generate_df_tensor(TinySCF);
+	et = get_wtime_sec();
+	printf("* build DF tensor   : %.3lf (s)\n", et - st);
 
 	printf("---------- DF tensor construction finished ----------\n");
 }
