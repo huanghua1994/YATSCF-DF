@@ -1,6 +1,7 @@
 #ifndef _YATSCF_TFOCK_H_
 #define _YATSCF_TFOCK_H_
 
+#include <mkl.h>
 #include <omp.h>
 #include "CMS.h"
 
@@ -88,6 +89,13 @@ struct TinySCF_struct
 	int    DIIS_len;      // Number of previous F matrices
 	int    DIIS_bmax_id;  // The ID of a previous F matrix whose residual has the largest 2-norm
 	double DIIS_bmax;     // The largest 2-norm of the stored F matrices' residuals
+	
+	// MKL batch dgemm arrays
+	CBLAS_TRANSPOSE *temp_K_transa, *temp_K_transb;
+	int *temp_K_m, *temp_K_n, *temp_K_k;
+	double *temp_K_alpha, *temp_K_beta;
+	double **temp_K_a, **temp_K_b, **temp_K_c;
+	int *temp_K_lda, *temp_K_ldb, *temp_K_ldc;
 	
 	// Statistic 
 	double mem_size, init_time, S_Hcore_time, shell_scr_time;

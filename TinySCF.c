@@ -534,9 +534,80 @@ static void TinySCF_calc_energy(TinySCF_t TinySCF)
 	TinySCF->HF_energy = energy;
 }
 
+void TinySCF_init_batch_dgemm_arrays(TinySCF_t TinySCF)
+{
+	int nbf    = TinySCF->nbasfuncs;
+	int df_nbf = TinySCF->df_nbf;
+	
+	// Batch dgemm arrays for temp_K construction
+	TinySCF->temp_K_transa = (CBLAS_TRANSPOSE*) malloc(sizeof(CBLAS_TRANSPOSE) * nbf);
+	TinySCF->temp_K_transb = (CBLAS_TRANSPOSE*) malloc(sizeof(CBLAS_TRANSPOSE) * nbf);
+	TinySCF->temp_K_m      = (int*)     malloc(sizeof(int)     * nbf);
+	TinySCF->temp_K_n      = (int*)     malloc(sizeof(int)     * nbf);
+	TinySCF->temp_K_k      = (int*)     malloc(sizeof(int)     * nbf);
+	TinySCF->temp_K_alpha  = (double*)  malloc(sizeof(double)  * nbf);
+	TinySCF->temp_K_beta   = (double*)  malloc(sizeof(double)  * nbf);
+	TinySCF->temp_K_a      = (double**) malloc(sizeof(double*) * nbf);
+	TinySCF->temp_K_b      = (double**) malloc(sizeof(double*) * nbf);
+	TinySCF->temp_K_c      = (double**) malloc(sizeof(double*) * nbf);
+	TinySCF->temp_K_lda    = (int*)     malloc(sizeof(int)     * nbf);
+	TinySCF->temp_K_ldb    = (int*)     malloc(sizeof(int)     * nbf);
+	TinySCF->temp_K_ldc    = (int*)     malloc(sizeof(int)     * nbf);
+	assert(TinySCF->temp_K_transa != NULL);
+	assert(TinySCF->temp_K_transb != NULL);
+	assert(TinySCF->temp_K_m      != NULL);
+	assert(TinySCF->temp_K_n      != NULL);
+	assert(TinySCF->temp_K_k      != NULL);
+	assert(TinySCF->temp_K_alpha  != NULL);
+	assert(TinySCF->temp_K_beta   != NULL);
+	assert(TinySCF->temp_K_a      != NULL);
+	assert(TinySCF->temp_K_b      != NULL);
+	assert(TinySCF->temp_K_c      != NULL);
+	assert(TinySCF->temp_K_lda    != NULL);
+	assert(TinySCF->temp_K_ldb    != NULL);
+	assert(TinySCF->temp_K_ldc    != NULL);
+	// These arrays have fixed values, can be set at the beginning
+	for (int i = 0; i < nbf; i++)
+	{
+		TinySCF->temp_K_transa[i] = CblasNoTrans;
+		TinySCF->temp_K_transb[i] = CblasNoTrans;
+		TinySCF->temp_K_m[i]      = nbf;
+		TinySCF->temp_K_n[i]      = df_nbf;  
+		TinySCF->temp_K_k[i]      = nbf;
+		TinySCF->temp_K_alpha[i]  = 1.0;
+		TinySCF->temp_K_beta[i]   = 0.0;
+		TinySCF->temp_K_a[i]      = TinySCF->D_mat;
+		TinySCF->temp_K_b[i]      = TinySCF->df_tensor + i * df_nbf;
+		TinySCF->temp_K_c[i]      = TinySCF->temp_K    + i * df_nbf;
+		TinySCF->temp_K_lda[i]    = nbf;
+		TinySCF->temp_K_ldb[i]    = nbf * df_nbf;
+		TinySCF->temp_K_ldc[i]    = nbf * df_nbf;
+	}
+	
+}
+
+void TinySCF_free_batch_dgemm_arrays(TinySCF_t TinySCF)
+{
+	free(TinySCF->temp_K_transa);
+	free(TinySCF->temp_K_transb); 
+	free(TinySCF->temp_K_m);
+	free(TinySCF->temp_K_n);
+	free(TinySCF->temp_K_k);
+	free(TinySCF->temp_K_alpha);
+	free(TinySCF->temp_K_beta);
+	free(TinySCF->temp_K_a);
+	free(TinySCF->temp_K_b);
+	free(TinySCF->temp_K_c);
+	free(TinySCF->temp_K_lda);
+	free(TinySCF->temp_K_ldb);
+	free(TinySCF->temp_K_ldc);
+}
+
 void TinySCF_do_SCF(TinySCF_t TinySCF)
 {
 	TinySCF_build_DF_tensor(TinySCF);
+	
+	TinySCF_init_batch_dgemm_arrays(TinySCF);
 	
 	// Start SCF iterations
 	printf("TinySCF SCF iteration started...\n");
@@ -593,5 +664,7 @@ void TinySCF_do_SCF(TinySCF_t TinySCF)
 		TinySCF->iter++;
 	}
 	printf("--------------- SCF iterations finished ---------------\n");
+	
+	TinySCF_free_batch_dgemm_arrays(TinySCF);
 }
 

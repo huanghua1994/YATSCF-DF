@@ -93,13 +93,17 @@ void build_K_mat(TinySCF_t TinySCF)
 	
 	// Construct temporary tensor for K matrix
 	// Formula: temp_K(k, j, p) = dot(D_mat(k, 1:nbf), df_tensor(1:nbf, j, p))
-	for (int j = 0; j < nbf; j++)
-	{
-		double *temp_K_j    = temp_K    + j * df_nbf;
-		double *df_tensor_j = df_tensor + j * df_nbf;
-		cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, nbf, df_nbf, nbf, 
-		            1.0, D_mat, nbf, df_tensor_j, nbf * df_nbf, 0.0, temp_K_j, nbf * df_nbf);
-	}
+	int group_size = nbf;
+	cblas_dgemm_batch(
+		CblasRowMajor, TinySCF->temp_K_transa, TinySCF->temp_K_transb, 
+		TinySCF->temp_K_m, TinySCF->temp_K_n, TinySCF->temp_K_k, 
+		TinySCF->temp_K_alpha, 
+		TinySCF->temp_K_a, TinySCF->temp_K_lda,
+		TinySCF->temp_K_b, TinySCF->temp_K_ldb,
+		TinySCF->temp_K_beta,
+		TinySCF->temp_K_c, TinySCF->temp_K_ldc,
+		1, &group_size
+	);
 
 	// Build K matrix
 	// Formula: K(i, j) = sum_{k=1}^{nbf} [ dot(df_tensor(i, k, 1:df_nbf), temp_K(k, j, 1:df_nbf)) ]
