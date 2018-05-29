@@ -8,6 +8,17 @@
 #include "TinySCF.h"
 #include "build_Fock.h"
 
+static int BLOCK_LOW(int i, int n, int size)
+{
+	int remainder = size % n;
+	int bs0 = size / n;
+	int bs1 = bs0 + 1;
+	int res;
+	if (i <= remainder) res = bs1 * i;
+	else res = bs0 * i + remainder;
+	return res;
+}
+
 void TinySCF_build_FockMat(TinySCF_t TinySCF)
 {
 	double *Hcore_mat = TinySCF->Hcore_mat;
@@ -20,25 +31,58 @@ void TinySCF_build_FockMat(TinySCF_t TinySCF)
 	double *temp_K    = TinySCF->temp_K;
 	int nbf           = TinySCF->nbasfuncs;
 	int df_nbf        = TinySCF->df_nbf;
+	int nthreads      = TinySCF->nthreads;
 
 	memset(temp_J, 0, DBL_SIZE * df_nbf);
 	memset(temp_K, 0, DBL_SIZE * nbf * nbf * df_nbf);
 
 	// UNDONE: (1) parallelize; (2) use dgemm for K matrix contraction
 
-	// Generate the temporary tensor for J and K matrix
-	for (int k = 0; k < nbf; k++)
+	// Generate temporary array for J matrix and form J matrix
+	// Low flop-per-byte ratio: access: nbf^2 * (df_nbf+1), compute: nbf^2 * df_nbf 
+	#pragma omp parallel
 	{
-		for (int l = 0; l < nbf; l++)
+		int tid  = omp_get_thread_num();
+		int spos = BLOCK_LOW(tid, nthreads, df_nbf);
+		int epos = BLOCK_LOW(tid + 1, nthreads, df_nbf);
+
+		for (int i = spos; i < epos; i++) temp_J[i] = 0;
+
+		// Generate temporary array for J
+		for (int k = 0; k < nbf; k++)
 		{
-			double D_kl = D_mat[k * nbf + l];
-			double *df_tensor_row = df_tensor + (l * nbf + k) * df_nbf;
-			#pragma simd
-			for (int p = 0; p < df_nbf; p++)
-				temp_J[p] += D_kl * df_tensor_row[p];
+			for (int l = 0; l < nbf; l++)
+			{
+				double D_kl = D_mat[k * nbf + l];
+				double *df_tensor_row = df_tensor + (l * nbf + k) * df_nbf;
+
+				#pragma simd
+				for (int p = spos; p < epos; p++)
+					temp_J[p] += D_kl * df_tensor_row[p];
+			}
+		}
+
+		#pragma omp barrier
+
+		// Build J matrix
+		#pragma omp for schedule(dynamic)
+		for (int i = 0; i < nbf; i++)
+		{
+			for (int j = i; j < nbf; j++)
+			{
+				double t = 0;
+				double *df_tensor_row = df_tensor + (i * nbf + j) * df_nbf;
+				#pragma simd
+				for (int p = 0; p < df_nbf; p++)
+					t += temp_J[p] * df_tensor_row[p];
+				J_mat[i * nbf + j] = t;
+				J_mat[j * nbf + i] = t;
+			}
 		}
 	}
 
+	// Generate the temporary tensor for K matrix and form K matrix
+	// High flop-per-byte ratio: access: nbf^2 * (2*df_nbf+1), compute: nbf^3 * df_nbf
 	for (int k = 0; k < nbf; k++)
 	{
 		for (int j = 0; j < nbf; j++)
@@ -55,21 +99,7 @@ void TinySCF_build_FockMat(TinySCF_t TinySCF)
 		}
 	}
 
-	// Build F and K matrix
-	for (int i = 0; i < nbf; i++)
-	{
-		for (int j = i; j < nbf; j++)
-		{
-			double t = 0;
-			double *df_tensor_row = df_tensor + (i * nbf + j) * df_nbf;
-			#pragma simd
-			for (int p = 0; p < df_nbf; p++)
-				t += temp_J[p] * df_tensor_row[p];
-			J_mat[i * nbf + j] = t;
-			J_mat[j * nbf + i] = t;
-		}
-	}
-
+	// Build K matrix
 	for (int i = 0; i < nbf; i++)
 	{
 		for (int j = i; j < nbf; j++)
