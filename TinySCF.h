@@ -91,11 +91,14 @@ struct TinySCF_struct
 	double DIIS_bmax;     // The largest 2-norm of the stored F matrices' residuals
 	
 	// MKL batch dgemm arrays
-	CBLAS_TRANSPOSE *temp_K_transa, *temp_K_transb;
-	int *temp_K_m, *temp_K_n, *temp_K_k;
-	double *temp_K_alpha, *temp_K_beta;
 	double **temp_K_a, **temp_K_b, **temp_K_c;
-	int *temp_K_lda, *temp_K_ldb, *temp_K_ldc;
+
+	int mat_K_BS, mat_K_group_size[3], mat_K_ntiles;
+	CBLAS_TRANSPOSE *mat_K_transa, *mat_K_transb;
+	int *mat_K_m, *mat_K_n, *mat_K_k;
+	double *mat_K_alpha, *mat_K_beta;
+	double **mat_K_a, **mat_K_b, **mat_K_c;
+	int *mat_K_lda, *mat_K_ldb, *mat_K_ldc;
 	
 	// Statistic 
 	double mem_size, init_time, S_Hcore_time, shell_scr_time;
