@@ -213,10 +213,12 @@ static void calc_inverse_sqrt_Jpq(TinySCF_t TinySCF)
 	for (int i = 0; i < df_nbf; i++)
 		df_eigval[i] = 1.0 / sqrt(df_eigval[i]);
 	// Right multiply the S^{-1/2} to U
-	memcpy(tmp_mat1, tmp_mat0, df_mat_mem_size);
+	#pragma omp parallel for
 	for (int irow = 0; irow < df_nbf; irow++)
 	{
 		double *tmp_mat0_ptr = tmp_mat0 + irow * df_nbf;
+		double *tmp_mat1_ptr = tmp_mat1 + irow * df_nbf;
+		memcpy(tmp_mat1_ptr, tmp_mat0_ptr, DBL_SIZE * df_nbf);
 		for (int icol = 0; icol < df_nbf; icol++)
 			tmp_mat0_ptr[icol] *= df_eigval[icol];
 	}
@@ -289,7 +291,6 @@ void TinySCF_build_DF_tensor(TinySCF_t TinySCF)
 	printf("* matrix inv-sqrt   : %.3lf (s)\n", et - st);
 
 	// Form the density fitting tensor
-	// UNDONE: (1) parallelize; (2) use dgemm
 	st = get_wtime_sec();
 	generate_df_tensor(TinySCF);
 	et = get_wtime_sec();
