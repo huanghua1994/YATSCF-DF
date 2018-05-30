@@ -106,11 +106,6 @@ struct TinySCF_struct
 
 typedef struct TinySCF_struct* TinySCF_t;
 
-// Initialize TinySCF with a Cartesian basis set file (.gbs format), a molecule 
-// coordinate file and the number of SCF iterations (handled by libcint), and
-// allocate all memory for other calculation
-void init_TinySCF(TinySCF_t TinySCF, char *bas_fname, char *df_bas_fname, char *xyz_fname, const int niters);
-
 // Compute core Hamiltonian and overlap matrix, and generate basis transform matrix
 // The overlap matrix is not needed after generating basis transform matrix, and its
 // memory space will be used as temporary space in other procedure
@@ -125,8 +120,5 @@ void TinySCF_get_initial_guess(TinySCF_t TinySCF);
 
 // Perform SCF iterations
 void TinySCF_do_SCF(TinySCF_t TinySCF);
-
-// Destroy TinySCF, free all allocated memory
-void free_TinySCF(TinySCF_t TinySCF);
 
 #endif

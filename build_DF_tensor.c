@@ -243,6 +243,7 @@ static void generate_df_tensor(TinySCF_t TinySCF)
 	for (size_t i = 0; i < nbf * nbf * df_nbf; i++) 
 		df_tensor[i] = 0;
 	
+	// Cannot use batch dgemm here since each time the size of A matrix is different
 	for (int M = 0; M < nbf; M++)
 	{
 		size_t offset = (size_t) (M * nbf + M) * (size_t) df_nbf;
