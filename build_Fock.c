@@ -52,10 +52,11 @@ static void build_J_mat(TinySCF_t TinySCF)
 			for (int l = 0; l < nbf; l++)
 			{
 				double D_kl = D_mat[k * nbf + l];
-				double *df_tensor_row = df_tensor + (l * nbf + k) * df_nbf;
+				size_t offset = (size_t) (l * nbf + k) * (size_t) df_nbf;
+				double *df_tensor_row = df_tensor + offset;
 
 				#pragma simd
-				for (int p = spos; p < epos; p++)
+				for (size_t p = spos; p < epos; p++)
 					temp_J[p] += D_kl * df_tensor_row[p];
 			}
 		}
@@ -69,9 +70,10 @@ static void build_J_mat(TinySCF_t TinySCF)
 			for (int j = i; j < nbf; j++)
 			{
 				double t = 0;
-				double *df_tensor_row = df_tensor + (i * nbf + j) * df_nbf;
+				size_t offset = (size_t) (i * nbf + j) * (size_t) df_nbf;
+				double *df_tensor_row = df_tensor + offset;
 				#pragma simd
-				for (int p = 0; p < df_nbf; p++)
+				for (size_t p = 0; p < df_nbf; p++)
 					t += temp_J[p] * df_tensor_row[p];
 				J_mat[i * nbf + j] = t;
 			}
@@ -129,17 +131,21 @@ void build_K_mat(TinySCF_t TinySCF)
 			3, TinySCF->mat_K_group_size
 		);
 		
+		size_t K_a_offset = df_nbf;
+		size_t K_b_offset = nbf * df_nbf;
 		for (int i = 0; i < TinySCF->mat_K_ntiles; i++)
 		{
-			TinySCF->mat_K_a[i] += df_nbf;
-			TinySCF->mat_K_b[i] += nbf * df_nbf;
+			TinySCF->mat_K_a[i] += K_a_offset;
+			TinySCF->mat_K_b[i] += K_b_offset;
 		}
 	}
 	// Reset array points to initial values
+	size_t K_a_offset = (size_t) nbf * df_nbf;
+	size_t K_b_offset = (size_t) nbf * (size_t) nbf * (size_t) df_nbf;
 	for (int i = 0; i < TinySCF->mat_K_ntiles; i++)
 	{
-		TinySCF->mat_K_a[i] -= nbf * df_nbf;
-		TinySCF->mat_K_b[i] -= nbf * nbf * df_nbf;
+		TinySCF->mat_K_a[i] -= K_a_offset;
+		TinySCF->mat_K_b[i] -= K_b_offset;
 	}
 }
 
