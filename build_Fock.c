@@ -81,32 +81,31 @@ static void build_J_mat(TinySCF_t TinySCF)
 	}
 }
 
+
 // Generate the temporary tensor for K matrix and form K matrix
 // High flop-per-byte ratio: access: nbf^2 * (2*df_nbf+1), compute: nbf^3 * df_nbf
 // Note: the K_mat is not completed, the symmetrizing is done later
 void build_K_mat(TinySCF_t TinySCF)
 {
-	double *K_mat     = TinySCF->K_mat;
-	double *D_mat     = TinySCF->D_mat;
-	double *df_tensor = TinySCF->df_tensor;
-	double *temp_K    = TinySCF->temp_K;
-	int nbf           = TinySCF->nbasfuncs;
-	int df_nbf        = TinySCF->df_nbf;
+	double *K_mat = TinySCF->K_mat;
+	int nbf       = TinySCF->nbasfuncs;
+	int df_nbf    = TinySCF->df_nbf;
+	int n_occ     = TinySCF->n_occ;
 	
 	// Construct temporary tensor for K matrix
-	// Formula: temp_K(k, j, p) = dot(D_mat(k, 1:nbf), df_tensor(1:nbf, j, p))
+	// Formula: temp_K(i, s, p) = dot(Cocc_mat(1:nbf, s), df_tensor(i, 1:nbf, p))
 	const int group_size = nbf;
-	const CBLAS_TRANSPOSE temp_K_transa = CblasNoTrans;
+	const CBLAS_TRANSPOSE temp_K_transa = CblasTrans;
 	const CBLAS_TRANSPOSE temp_K_transb = CblasNoTrans;
-	const int temp_K_m = nbf, temp_K_n = df_nbf, temp_K_k = nbf;
+	const int temp_K_m = n_occ, temp_K_n = df_nbf, temp_K_k = nbf;
 	const double temp_K_alpha = 1.0, temp_K_beta = 0.0;
-	const int temp_K_lda = nbf;
-	const int temp_K_ldb = nbf * df_nbf;
-	const int temp_K_ldc = nbf * df_nbf;
+	const int temp_K_lda = n_occ;
+	const int temp_K_ldb = df_nbf;
+	const int temp_K_ldc = df_nbf;
 	cblas_dgemm_batch(
 		CblasRowMajor, &temp_K_transa, &temp_K_transb, 
-		&temp_K_m, &temp_K_n, &temp_K_k, 
-		&temp_K_alpha, 
+		&temp_K_m, &temp_K_n, &temp_K_k,
+		&temp_K_alpha,
 		TinySCF->temp_K_a, &temp_K_lda,
 		TinySCF->temp_K_b, &temp_K_ldb,
 		&temp_K_beta,
@@ -115,10 +114,9 @@ void build_K_mat(TinySCF_t TinySCF)
 	);
 
 	// Build K matrix
-	// Formula: K(i, j) = sum_{k=1}^{nbf} [ dot(df_tensor(i, k, 1:df_nbf), temp_K(k, j, 1:df_nbf)) ]
+	// Formula: K(i, j) = sum_{s=1}^{n_occ} [ dot(temp_K(i, s, 1:df_nbf), temp_K(j, s, 1:df_nbf)) ]
 	memset(K_mat, 0, DBL_SIZE * nbf * nbf);
-	
-	for (int k = 0; k < nbf; k++)
+	for (int k = 0; k < n_occ; k++)
 	{
 		cblas_dgemm_batch(
 			CblasRowMajor, TinySCF->mat_K_transa, TinySCF->mat_K_transb, 
@@ -131,22 +129,20 @@ void build_K_mat(TinySCF_t TinySCF)
 			3, TinySCF->mat_K_group_size
 		);
 		
-		size_t K_a_offset = df_nbf;
-		size_t K_b_offset = nbf * df_nbf;
+		size_t offset = (size_t) df_nbf;
 		for (int i = 0; i < TinySCF->mat_K_ntiles; i++)
 		{
-			TinySCF->mat_K_a[i] += K_a_offset;
-			TinySCF->mat_K_b[i] += K_b_offset;
+			TinySCF->mat_K_a[i] += offset;
+			TinySCF->mat_K_b[i] += offset;
 		}
 	}
 	// Reset array points to initial values
-	size_t K_a_offset = (size_t) nbf * df_nbf;
-	size_t K_b_offset = (size_t) nbf * (size_t) nbf * (size_t) df_nbf;
+	size_t offset = (size_t) n_occ * (size_t) df_nbf;
 	for (int i = 0; i < TinySCF->mat_K_ntiles; i++)
 	{
-		TinySCF->mat_K_a[i] -= K_a_offset;
-		TinySCF->mat_K_b[i] -= K_b_offset;
-	}
+		TinySCF->mat_K_a[i] -= offset;
+		TinySCF->mat_K_b[i] -= offset;
+	}	
 }
 
 void TinySCF_build_FockMat(TinySCF_t TinySCF)
