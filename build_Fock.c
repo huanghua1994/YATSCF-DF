@@ -101,7 +101,7 @@ void build_K_mat(TinySCF_t TinySCF)
 	const double temp_K_alpha = 1.0, temp_K_beta = 0.0;
 	const int temp_K_lda = n_occ;
 	const int temp_K_ldb = df_nbf;
-	const int temp_K_ldc = df_nbf;
+	const int temp_K_ldc = df_nbf * nbf;
 	cblas_dgemm_batch(
 		CblasRowMajor, &temp_K_transa, &temp_K_transb, 
 		&temp_K_m, &temp_K_n, &temp_K_k,
@@ -116,7 +116,7 @@ void build_K_mat(TinySCF_t TinySCF)
 	// Build K matrix
 	// Formula: K(i, j) = sum_{s=1}^{n_occ} [ dot(temp_K(i, s, 1:df_nbf), temp_K(j, s, 1:df_nbf)) ]
 	memset(K_mat, 0, DBL_SIZE * nbf * nbf);
-	for (int k = 0; k < n_occ; k++)
+	for (int s = 0; s < n_occ; s++)
 	{
 		cblas_dgemm_batch(
 			CblasRowMajor, TinySCF->mat_K_transa, TinySCF->mat_K_transb, 
@@ -129,7 +129,7 @@ void build_K_mat(TinySCF_t TinySCF)
 			3, TinySCF->mat_K_group_size
 		);
 		
-		size_t offset = (size_t) df_nbf;
+		size_t offset = (size_t) df_nbf * (size_t) nbf;
 		for (int i = 0; i < TinySCF->mat_K_ntiles; i++)
 		{
 			TinySCF->mat_K_a[i] += offset;
@@ -137,7 +137,7 @@ void build_K_mat(TinySCF_t TinySCF)
 		}
 	}
 	// Reset array points to initial values
-	size_t offset = (size_t) n_occ * (size_t) df_nbf;
+	size_t offset = (size_t) n_occ * (size_t) df_nbf * (size_t) nbf;
 	for (int i = 0; i < TinySCF->mat_K_ntiles; i++)
 	{
 		TinySCF->mat_K_a[i] -= offset;
