@@ -106,13 +106,14 @@ static void calc_DF_3center_integrals(TinySCF_t TinySCF)
 							&thread_multi_shellpair
 						);
 						
-						assert(thread_nints > 0);
-
-						copy_3center_integral_results(
-							thread_npairs, thread_P_list, thread_nints, thread_integrals,
-							df_shell_bf_sind, pqA, nbf, df_nbf,
-							startM, endM, startN, endN, dimN
-						);
+						if (thread_nints > 0)
+						{
+							copy_3center_integral_results(
+								thread_npairs, thread_P_list, thread_nints, thread_integrals,
+								df_shell_bf_sind, pqA, nbf, df_nbf,
+								startM, endM, startN, endN, dimN
+							);
+						}
 						
 						thread_npairs = 0;
 					}
@@ -126,13 +127,14 @@ static void calc_DF_3center_integrals(TinySCF_t TinySCF)
 						&thread_multi_shellpair
 					);
 					
-					assert(thread_nints > 0);
-					
-					copy_3center_integral_results(
-						thread_npairs, thread_P_list, thread_nints, thread_integrals,
-						df_shell_bf_sind, pqA, nbf, df_nbf,
-						startM, endM, startN, endN, dimN
-					);
+					if (thread_nints > 0)
+					{
+						copy_3center_integral_results(
+							thread_npairs, thread_P_list, thread_nints, thread_integrals,
+							df_shell_bf_sind, pqA, nbf, df_nbf,
+							startM, endM, startN, endN, dimN
+						);
+					}
 				} 
 			}  // for (int iAM = 0; iAM <= simint->df_max_am; iAM++)
 		}  // for (int iMN = 0; iMN < TinySCF->num_uniq_sp; iMN++)
@@ -171,7 +173,7 @@ static void calc_DF_2center_integrals(TinySCF_t TinySCF)
 
 				CMS_Simint_computeDFShellPair(simint, tid, M, N, &thread_integrals, &thread_nints);
 				
-				assert(thread_nints > 0);
+				if (thread_nints <= 0) continue;
 				
 				int startM = df_shell_bf_sind[M];
 				int endM   = df_shell_bf_sind[M + 1];

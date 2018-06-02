@@ -106,8 +106,8 @@ void build_K_mat(TinySCF_t TinySCF)
 		CblasRowMajor, &temp_K_transa, &temp_K_transb, 
 		&temp_K_m, &temp_K_n, &temp_K_k,
 		&temp_K_alpha,
-		TinySCF->temp_K_a, &temp_K_lda,
-		TinySCF->temp_K_b, &temp_K_ldb,
+		(const double **) TinySCF->temp_K_a, &temp_K_lda,
+		(const double **) TinySCF->temp_K_b, &temp_K_ldb,
 		&temp_K_beta,
 		TinySCF->temp_K_c, &temp_K_ldc,
 		1, &group_size
@@ -122,8 +122,8 @@ void build_K_mat(TinySCF_t TinySCF)
 			CblasRowMajor, TinySCF->mat_K_transa, TinySCF->mat_K_transb, 
 			TinySCF->mat_K_m, TinySCF->mat_K_n, TinySCF->mat_K_k, 
 			TinySCF->mat_K_alpha, 
-			TinySCF->mat_K_a, TinySCF->mat_K_lda,
-			TinySCF->mat_K_b, TinySCF->mat_K_ldb,
+			(const double **) TinySCF->mat_K_a, TinySCF->mat_K_lda,
+			(const double **) TinySCF->mat_K_b, TinySCF->mat_K_ldb,
 			TinySCF->mat_K_beta,
 			TinySCF->mat_K_c, TinySCF->mat_K_ldc,
 			3, TinySCF->mat_K_group_size
