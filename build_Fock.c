@@ -46,7 +46,7 @@ static void build_J_mat(TinySCF_t TinySCF, double *temp_J_t, double *J_mat_t)
 		t0 = get_wtime_sec();
 		
 		// Reduce false sharing 
-		double *temp_J_thread = _mm_malloc(sizeof(double) * (epos - spos), 64);
+		double *temp_J_thread = TinySCF->temp_J0 + TinySCF->thread_temp_J0_len * tid;
 		
 		// Generate temporary array for J
 		memset(temp_J_thread, 0, sizeof(double) * (epos - spos));
@@ -67,8 +67,6 @@ static void build_J_mat(TinySCF_t TinySCF, double *temp_J_t, double *J_mat_t)
 		// May have false sharing 
 		for (size_t p = spos; p < epos; p++)
 			temp_J[p] = temp_J_thread[p - spos];
-		
-		_mm_free(temp_J_thread);
 
 		#pragma omp barrier
 		

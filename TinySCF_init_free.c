@@ -206,13 +206,19 @@ void init_TinySCF(TinySCF_t TinySCF, char *bas_fname, char *df_bas_fname, char *
 	TinySCF->DIIS_bmax    = -DBL_MAX;
 	
 	// Allocate memory for density fitting tensors and buffers
-	size_t tensor_memsize = (size_t) TinySCF->mat_size * (size_t) TinySCF->df_nbf;
-	size_t df_mat_memsize = (size_t) TinySCF->df_nbf * (size_t) TinySCF->df_nbf;
-	tensor_memsize *= DBL_SIZE;
-	df_mat_memsize *= DBL_SIZE;
+	int max_thread_temp_J_len   = (TinySCF->df_nbf + TinySCF->nthreads - 1) / TinySCF->nthreads;
+	TinySCF->thread_temp_J0_len = (max_thread_temp_J_len / 16 + 1) * 16;
+	size_t temp_J0_memsize = (size_t) TinySCF->thread_temp_J0_len * TinySCF->nthreads;
+	size_t tensor_memsize  = (size_t) TinySCF->mat_size * (size_t) TinySCF->df_nbf;
+	size_t df_mat_memsize  = (size_t) TinySCF->df_nbf * (size_t) TinySCF->df_nbf;
+	tensor_memsize  *= DBL_SIZE;
+	df_mat_memsize  *= DBL_SIZE;
+	temp_J0_memsize *= DBL_SIZE;
+	TinySCF->temp_J0   = (double*) ALIGN64B_MALLOC(temp_J0_memsize);
 	TinySCF->pqA       = (double*) ALIGN64B_MALLOC(tensor_memsize);
 	TinySCF->df_tensor = (double*) ALIGN64B_MALLOC(tensor_memsize);
 	TinySCF->Jpq       = (double*) ALIGN64B_MALLOC(df_mat_memsize);
+	assert(TinySCF->temp_J0   != NULL);
 	assert(TinySCF->pqA       != NULL);
 	assert(TinySCF->df_tensor != NULL);
 	assert(TinySCF->Jpq       != NULL);
