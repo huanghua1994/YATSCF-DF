@@ -295,11 +295,11 @@ void free_TinySCF(TinySCF_t TinySCF)
 }
 
 
+
 void TinySCF_init_batch_dgemm_arrays(TinySCF_t TinySCF)
 {
 	int nbf    = TinySCF->nbasfuncs;
 	int df_nbf = TinySCF->df_nbf;
-	int n_occ  = TinySCF->n_occ;
 	
 	// Batch dgemm arrays for temp_K construction
 	TinySCF->temp_K_a = (double**) malloc(sizeof(double*) * nbf);
@@ -308,14 +308,12 @@ void TinySCF_init_batch_dgemm_arrays(TinySCF_t TinySCF)
 	assert(TinySCF->temp_K_a != NULL);
 	assert(TinySCF->temp_K_b != NULL);
 	assert(TinySCF->temp_K_c != NULL);
-	// These arrays have fixed values, can be set at the beginning
+	// These values are only for 1st iteration
 	for (int i = 0; i < nbf; i++)
 	{
-		size_t offset_b = (size_t) i * (size_t) nbf * (size_t) df_nbf;
-		size_t offset_c = (size_t) i * (size_t) df_nbf;
-		TinySCF->temp_K_a[i] = TinySCF->Cocc_mat;
-		TinySCF->temp_K_b[i] = TinySCF->df_tensor + offset_b;
-		TinySCF->temp_K_c[i] = TinySCF->temp_K    + offset_c;
+		TinySCF->temp_K_a[i] = TinySCF->D_mat;
+		TinySCF->temp_K_b[i] = TinySCF->df_tensor + i * df_nbf;
+		TinySCF->temp_K_c[i] = TinySCF->temp_K    + i * df_nbf;
 	}
 	
 	// Batch dgemm arrays for mat_K construction
@@ -327,6 +325,7 @@ void TinySCF_init_batch_dgemm_arrays(TinySCF_t TinySCF)
 	int ntiles = (nblocks + 1) * nblocks / 2;
 	int *group_size = TinySCF->mat_K_group_size;
 	TinySCF->mat_K_ntiles = ntiles;
+	TinySCF->mat_K_BS = mat_K_BS;
 	group_size[0] = (nblocks0 * (nblocks0 + 1)) / 2;
 	if (last_block_size > 0)
 	{
@@ -362,6 +361,7 @@ void TinySCF_init_batch_dgemm_arrays(TinySCF_t TinySCF)
 	assert(TinySCF->mat_K_lda    != NULL);
 	assert(TinySCF->mat_K_ldb    != NULL);
 	assert(TinySCF->mat_K_ldc    != NULL);
+	// These values are only for 1st iteration.
 	// These arrays except a, b, c matrix pointers have fixed values, 
 	// for matrix pointers, we can change them in the loop
 	int cnt0 = 0, cnt1 = group_size[0];
@@ -374,11 +374,11 @@ void TinySCF_init_batch_dgemm_arrays(TinySCF_t TinySCF)
 			int j_len = mat_K_BS < (nbf - j) ? mat_K_BS : (nbf - j);
 			
 			// Use k = 0 as initial pointer position
-			size_t offset_i0 = (size_t) i * (size_t) df_nbf;
-			size_t offset_j0 = (size_t) j * (size_t) df_nbf;
-			double *K_ij     = TinySCF->K_mat  + i * nbf + j;
-			double *temp_K_i = TinySCF->temp_K + offset_i0;
-			double *temp_K_j = TinySCF->temp_K + offset_j0;
+			size_t offset_i0 = (size_t) (i * nbf + 0) * (size_t) df_nbf;
+			size_t offset_0j = (size_t) (0 * nbf + j) * (size_t) df_nbf;
+			double *K_ij        = TinySCF->K_mat     + i * nbf + j;
+			double *df_tensor_i = TinySCF->df_tensor + offset_i0;
+			double *temp_K_j    = TinySCF->temp_K    + offset_0j;
 			
 			int cnt, gid;
 			if ((i_len == mat_K_BS) && (j_len == mat_K_BS))
@@ -401,14 +401,14 @@ void TinySCF_init_batch_dgemm_arrays(TinySCF_t TinySCF)
 			TinySCF->mat_K_transa[gid] = CblasNoTrans;
 			TinySCF->mat_K_transb[gid] = CblasTrans;
 			TinySCF->mat_K_m[gid]      = i_len;
-			TinySCF->mat_K_n[gid]      = j_len;
+			TinySCF->mat_K_n[gid]      = j_len;  
 			TinySCF->mat_K_k[gid]      = df_nbf;
 			TinySCF->mat_K_alpha[gid]  = 1.0;
 			TinySCF->mat_K_beta[gid]   = 1.0;
-			TinySCF->mat_K_a[cnt]      = temp_K_i;
+			TinySCF->mat_K_a[cnt]      = df_tensor_i;
 			TinySCF->mat_K_b[cnt]      = temp_K_j;
 			TinySCF->mat_K_c[cnt]      = K_ij;
-			TinySCF->mat_K_lda[gid]    = df_nbf;
+			TinySCF->mat_K_lda[gid]    = nbf * df_nbf;
 			TinySCF->mat_K_ldb[gid]    = df_nbf;
 			TinySCF->mat_K_ldc[gid]    = nbf;
 		}

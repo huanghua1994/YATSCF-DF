@@ -235,37 +235,6 @@ void TinySCF_get_initial_guess(TinySCF_t TinySCF)
 	
 	// Calculate nuclear energy
 	TinySCF->nuc_energy = CMS_getNucEnergy(TinySCF->basis);
-	
-	// Factor D = C_occ * C_occ^T 
-	double *tmp_mat  = TinySCF->tmp_mat;
-	double *eigval   = TinySCF->eigval;
-	int    *ev_idx   = TinySCF->ev_idx;
-	double *Cocc_mat = TinySCF->Cocc_mat;
-	int    n_occ     = TinySCF->n_occ;
-	memcpy(tmp_mat, TinySCF->D_mat, DBL_SIZE * TinySCF->mat_size);
-	// tmp_mat will be overwritten by eigenvectors
-	LAPACKE_dsyev(LAPACK_ROW_MAJOR, 'V', 'U', nbf, tmp_mat, nbf, eigval);
-	// Form the C_occ with eigenvectors corresponding to n_occ largest (in absolute sense) eigenvalues
-	for (int i = 0; i < nbf; i++) 
-	{
-		if (eigval[i] < 0)  // Use absolute value for sorting and mark that this eigenvalue is negative
-		{
-			ev_idx[i] = -i;
-			eigval[i] = -eigval[i];
-		} else ev_idx[i] = i;
-	}
-	quickSort_eigval(eigval, ev_idx, 0, nbf - 1);
-	for (int j = 0; j < n_occ; j++)
-	{
-		int ev_id = ev_idx[n_occ - 1 - j];
-		if (ev_id < 0)      // Restore the negative eigenvalue 
-		{
-			eigval[j] = -eigval[j];
-			ev_id = - ev_id;
-		}
-		for (int i = 0; i < nbf; i++)
-			Cocc_mat[i * n_occ + j] = tmp_mat[i * nbf + ev_id] * sqrt(eigval[j]);  // Factorize S and multiple to C_occ
-	}
 }
 
 // Compute Hartree-Fock energy
@@ -296,10 +265,10 @@ void TinySCF_do_SCF(TinySCF_t TinySCF)
 		st0 = get_wtime_sec();
 		
 		// Build the Fock matrix
-		st1 = get_wtime_sec();
+		// st1 = get_wtime_sec();
 		TinySCF_build_FockMat(TinySCF);
-		et1 = get_wtime_sec();
-		printf("* Build Fock matrix     : %.3lf (s)\n", et1 - st1);
+		// et1 = get_wtime_sec();
+		// printf("* Build Fock matrix     : %.3lf (s)\n", et1 - st1);
 
 		// Calculate new system energy
 		st1 = get_wtime_sec();
