@@ -3,17 +3,13 @@
 #include <stdlib.h>
 #include <math.h>
 #include <omp.h>
+#include <x86intrin.h>
 
 #include <mkl.h>
 
 #include "utils.h"
 #include "TinySCF.h"
 #include "build_Fock.h"
-
-// If BLOCK_SIZE is too small, the flop-per-byte ratio is small for dgemm and cannot have good 
-// performance. The redundant calculation in K matrix build is BLOCK_SIZE / nbf * 100%.
-// Consider using a dynamic value later. 
-#define BLOCK_SIZE 32
 
 static int BLOCK_LOW(int i, int n, int size)
 {
@@ -49,9 +45,11 @@ static void build_J_mat(TinySCF_t TinySCF, double *temp_J_t, double *J_mat_t)
 		#pragma omp master
 		t0 = get_wtime_sec();
 		
-		for (int i = spos; i < epos; i++) temp_J[i] = 0;
-
+		// Reduce false sharing 
+		double *temp_J_thread = _mm_malloc(sizeof(double) * (epos - spos), 64);
+		
 		// Generate temporary array for J
+		memset(temp_J_thread, 0, sizeof(double) * (epos - spos));
 		for (int k = 0; k < nbf; k++)
 		{
 			for (int l = 0; l < nbf; l++)
@@ -62,9 +60,15 @@ static void build_J_mat(TinySCF_t TinySCF, double *temp_J_t, double *J_mat_t)
 
 				#pragma simd
 				for (size_t p = spos; p < epos; p++)
-					temp_J[p] += D_kl * df_tensor_row[p];
+					temp_J_thread[p - spos] += D_kl * df_tensor_row[p];
 			}
 		}
+		
+		// May have false sharing 
+		for (size_t p = spos; p < epos; p++)
+			temp_J[p] = temp_J_thread[p - spos];
+		
+		_mm_free(temp_J_thread);
 
 		#pragma omp barrier
 		
