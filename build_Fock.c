@@ -93,7 +93,7 @@ void build_K_mat(TinySCF_t TinySCF)
 	int n_occ     = TinySCF->n_occ;
 	
 	// Construct temporary tensor for K matrix
-	// Formula: temp_K(i, s, p) = dot(Cocc_mat(1:nbf, s), df_tensor(i, 1:nbf, p))
+	// Formula: temp_K(s, i, p) = dot(Cocc_mat(1:nbf, s), df_tensor(i, 1:nbf, p))
 	const int group_size = nbf;
 	const CBLAS_TRANSPOSE temp_K_transa = CblasTrans;
 	const CBLAS_TRANSPOSE temp_K_transb = CblasNoTrans;
@@ -114,7 +114,7 @@ void build_K_mat(TinySCF_t TinySCF)
 	);
 
 	// Build K matrix
-	// Formula: K(i, j) = sum_{s=1}^{n_occ} [ dot(temp_K(i, s, 1:df_nbf), temp_K(j, s, 1:df_nbf)) ]
+	// Formula: K(i, j) = sum_{s=1}^{n_occ} [ dot(temp_K(s, i, 1:df_nbf), temp_K(s, j, 1:df_nbf)) ]
 	memset(K_mat, 0, DBL_SIZE * nbf * nbf);
 	for (int s = 0; s < n_occ; s++)
 	{

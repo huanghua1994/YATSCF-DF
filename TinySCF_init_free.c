@@ -141,7 +141,6 @@ void init_TinySCF(TinySCF_t TinySCF, char *bas_fname, char *df_bas_fname, char *
 	TinySCF->mem_size += (double) (8 * mat_mem_size);
 	TinySCF->mem_size += (double) (DBL_SIZE * TinySCF->n_occ * TinySCF->nbasfuncs);
 	TinySCF->mem_size += (double) ((DBL_SIZE + INT_SIZE) * TinySCF->nbasfuncs);
-	memset(TinySCF->Cocc_mat, 0, DBL_SIZE * TinySCF->n_occ * TinySCF->nbasfuncs);
 	
 	// Allocate memory for blocked J, K and D matrices and the offsets of each block
 	// and compute the offsets of each block of J, K and D matrices

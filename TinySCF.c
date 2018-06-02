@@ -88,7 +88,7 @@ static int cmp_pair(int M1, int N1, int M2, int N2)
 	else return (M1 < M2);
 }
 
-static void quickSort(int *M, int *N, int l, int r)
+static void quickSort_MNpair(int *M, int *N, int l, int r)
 {
 	int i = l, j = r, tmp;
 	int mid_M = M[(i + j) / 2];
@@ -105,8 +105,8 @@ static void quickSort(int *M, int *N, int l, int r)
 			i++;  j--;
 		}
 	}
-	if (i < r) quickSort(M, N, i, r);
-	if (j > l) quickSort(M, N, l, j);
+	if (i < r) quickSort_MNpair(M, N, i, r);
+	if (j > l) quickSort_MNpair(M, N, l, j);
 }
 
 void TinySCF_compute_sq_Schwarz_scrvals(TinySCF_t TinySCF)
@@ -197,7 +197,7 @@ void TinySCF_compute_sq_Schwarz_scrvals(TinySCF_t TinySCF)
 		}
 	}
 	TinySCF->num_uniq_sp = nnz;
-	quickSort(TinySCF->uniq_sp_lid, TinySCF->uniq_sp_rid, 0, nnz - 1);
+	quickSort_MNpair(TinySCF->uniq_sp_lid, TinySCF->uniq_sp_rid, 0, nnz - 1);
 	
 	double et = get_wtime_sec();
 	TinySCF->shell_scr_time = et - st;
@@ -212,14 +212,15 @@ void TinySCF_get_initial_guess(TinySCF_t TinySCF)
 	
 	double *guess;
 	int spos, epos, ldg;
-	int nbf  = TinySCF->nbasfuncs;
+	int nbf = TinySCF->nbasfuncs;
+	double *D_mat = TinySCF->D_mat;
 	
 	// Copy the SAD data to diagonal block of the density matrix
 	for (int i = 0; i < TinySCF->natoms; i++)
 	{
 		CMS_getInitialGuess(TinySCF->basis, i, &guess, &spos, &epos);
 		ldg = epos - spos + 1;
-		double *D_mat_ptr = TinySCF->D_mat + spos * nbf + spos;
+		double *D_mat_ptr = D_mat + spos * nbf + spos;
 		copy_matrix_block(D_mat_ptr, nbf, guess, ldg, ldg, ldg);
 	}
 	
@@ -230,11 +231,41 @@ void TinySCF_get_initial_guess(TinySCF_t TinySCF)
 	if (charge != 0 && electron != 0) 
 		R = (double)(electron - charge) / (double)(electron);
 	R *= 0.5;
-	for (int i = 0; i < TinySCF->mat_size; i++)
-		TinySCF->D_mat[i] *= R;
+	for (int i = 0; i < TinySCF->mat_size; i++) D_mat[i] *= R;
 	
 	// Calculate nuclear energy
 	TinySCF->nuc_energy = CMS_getNucEnergy(TinySCF->basis);
+	
+	// Factor D = C_occ * C_occ^T 
+	double *tmp_mat  = TinySCF->tmp_mat;
+	double *eigval   = TinySCF->eigval;
+	int    *ev_idx   = TinySCF->ev_idx;
+	double *Cocc_mat = TinySCF->Cocc_mat;
+	int    n_occ     = TinySCF->n_occ;
+	memcpy(tmp_mat, TinySCF->D_mat, DBL_SIZE * TinySCF->mat_size);
+	// tmp_mat will be overwritten by eigenvectors
+	LAPACKE_dsyev(LAPACK_ROW_MAJOR, 'V', 'U', nbf, tmp_mat, nbf, eigval);
+	// Form the C_occ with eigenvectors corresponding to n_occ largest (in absolute sense) eigenvalues
+	for (int i = 0; i < nbf; i++) 
+	{
+		if (eigval[i] < 0)  // Use absolute value for sorting and mark that this eigenvalue is negative
+		{
+			ev_idx[i] = -i;
+			eigval[i] = -eigval[i];
+		} else ev_idx[i] = i;
+	}
+	quickSort_eigval(eigval, ev_idx, 0, nbf - 1);
+	for (int j = 0; j < n_occ; j++)
+	{
+		int ev_id = ev_idx[n_occ - 1 - j];
+		if (ev_id < 0)      // Restore the negative eigenvalue 
+		{
+			eigval[j] = -eigval[j];
+			ev_id = - ev_id;
+		}
+		for (int i = 0; i < nbf; i++)
+			Cocc_mat[i * n_occ + j] = tmp_mat[i * nbf + ev_id] * sqrt(eigval[j]);  // Factorize S and multiple to C_occ
+	}
 }
 
 // Compute Hartree-Fock energy
