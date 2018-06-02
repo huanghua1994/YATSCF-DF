@@ -67,8 +67,8 @@ struct TinySCF_struct
 	
 	// Density fitting tensors and buffers
 	double *pqA, *Jpq, *df_tensor;
-	double *temp_J, *temp_K, *temp_J0;
-	int thread_temp_J0_len;
+	double *temp_J, *temp_K;
+	int    df_nbf_16;
 	
 	// Blocked J, K and D matrices and the offsets of each block
 	double *J_mat_block;  

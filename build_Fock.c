@@ -11,16 +11,26 @@
 #include "TinySCF.h"
 #include "build_Fock.h"
 
-static int BLOCK_LOW(int i, int n, int size)
+void reduce_temp_J(double *temp_J, double *temp_J_thread, int len, int tid, int nthreads)
 {
-	int remainder = size % n;
-	int bs0 = size / n;
-	int bs1 = bs0 + 1;
-	int res;
-	if (i <= remainder) res = bs1 * i;
-	else res = bs0 * i + remainder;
-	return res;
+	while (nthreads > 1)
+	{
+		int mid = (nthreads + 1) / 2;
+		int act_mid = nthreads / 2;
+		if (tid < act_mid)
+		{
+			double *dst = temp_J_thread + len * mid;
+
+			#pragma simd
+			for (int i = 0; i < len; i++)
+				temp_J_thread[i] += dst[i];
+		}
+
+		#pragma omp barrier
+		nthreads = mid;
+	}
 }
+
 
 // Generate temporary array for J matrix and form J matrix
 // Low flop-per-byte ratio: access: nbf^2 * (df_nbf+1), compute: nbf^2 * df_nbf 
@@ -39,36 +49,33 @@ static void build_J_mat(TinySCF_t TinySCF, double *temp_J_t, double *J_mat_t)
 	#pragma omp parallel
 	{
 		int tid  = omp_get_thread_num();
-		int spos = BLOCK_LOW(tid, nthreads, df_nbf);
-		int epos = BLOCK_LOW(tid + 1, nthreads, df_nbf);
 
 		#pragma omp master
 		t0 = get_wtime_sec();
 		
-		// Reduce false sharing 
-		double *temp_J_thread = TinySCF->temp_J0 + TinySCF->thread_temp_J0_len * tid;
+		// Use thread local buffer (aligned to 128B) to reduce false sharing
+		double *temp_J_thread = TinySCF->temp_J + TinySCF->df_nbf_16 * tid;
 		
 		// Generate temporary array for J
-		memset(temp_J_thread, 0, sizeof(double) * (epos - spos));
-		for (int k = 0; k < nbf; k++)
-		{
-			for (int l = 0; l < nbf; l++)
-			{
-				double D_kl = D_mat[k * nbf + l];
-				size_t offset = (size_t) (l * nbf + k) * (size_t) df_nbf;
-				double *df_tensor_row = df_tensor + offset;
+		memset(temp_J_thread, 0, sizeof(double) * df_nbf);
 
-				#pragma simd
-				for (size_t p = spos; p < epos; p++)
-					temp_J_thread[p - spos] += D_kl * df_tensor_row[p];
-			}
+		#pragma omp for
+		for (int kl = 0; kl < nbf * nbf; kl++)
+		{
+			int l = kl % nbf;
+			int k = kl / nbf;
+			
+			double D_kl = D_mat[k * nbf + l];
+			size_t offset = (size_t) (l * nbf + k) * (size_t) df_nbf;
+			double *df_tensor_row = df_tensor + offset;
+
+			#pragma simd
+			for (size_t p = 0; p < df_nbf; p++)
+				temp_J_thread[p] += D_kl * df_tensor_row[p];
 		}
 		
-		// May have false sharing 
-		for (size_t p = spos; p < epos; p++)
-			temp_J[p] = temp_J_thread[p - spos];
-
 		#pragma omp barrier
+		reduce_temp_J(TinySCF->temp_J, temp_J_thread, TinySCF->df_nbf_16, tid, TinySCF->nthreads);
 		
 		#pragma omp master
 		t1 = get_wtime_sec();
