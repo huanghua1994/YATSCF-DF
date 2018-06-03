@@ -6,7 +6,6 @@
 
 #include "CMS.h"
 #include "TinySCF.h"
-#include "TinySCF_init_free.h"
 #include "build_DF_tensor.h"
 
 static void print_usage(char *exe_name)
