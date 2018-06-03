@@ -57,8 +57,8 @@ struct TinySCF_struct
 	double *S_mat;          // Overlap matrix
 	double *F_mat;          // Fock matrix
 	double *D_mat;          // Density matrix
-	double *J_mat;          // Coulomb matrix   ((J+J^T)/2 is the actual Coulomb matrix)
-	double *K_mat;          // Exchange matrix  ((K+K^T)/2 is the actual Exchange matrix) 
+	double *J_mat;          // Coulomb matrix 
+	double *K_mat;          // Exchange matrix
 	double *X_mat;          // Basis transformation matrix
 	double *Cocc_mat;       // Temporary matrix for building density matrix
 	double *eigval;         // Eigenvalues for building density matrix
@@ -106,6 +106,24 @@ struct TinySCF_struct
 };
 
 typedef struct TinySCF_struct* TinySCF_t;
+
+// Initialize TinySCF with two Cartesian basis set file (.gbs format), a molecule 
+// coordinate file and the number of SCF iterations (handled by libcint), and
+// allocate all memory for other calculation
+void init_TinySCF(
+	TinySCF_t TinySCF, char *bas_fname, char *df_bas_fname, 
+	char *xyz_fname, const int niters
+);
+
+// Destroy TinySCF, free all allocated memory
+void free_TinySCF(TinySCF_t TinySCF);
+
+// Allocate arrays for MKL batch gemm and precompute tile info
+// for building the K matrix
+void TinySCF_init_batch_dgemm_arrays(TinySCF_t TinySCF);
+
+// Free MKL batch dgemm arrays
+void TinySCF_free_batch_dgemm_arrays(TinySCF_t TinySCF);
 
 // Compute core Hamiltonian and overlap matrix, and generate basis transform matrix
 // The overlap matrix is not needed after generating basis transform matrix, and its

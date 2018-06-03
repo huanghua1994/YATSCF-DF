@@ -21,7 +21,7 @@ $(EXE): Makefile $(OBJS) ${LIBCMS_LIBFILE} ${LIBSIMINT}
 utils.o: Makefile utils.c utils.h
 	$(CC) ${CFLAGS} ${INCS} -c utils.c -o $@ 
 
-TinySCF_init_free.o: Makefile TinySCF_init_free.c TinySCF_init_free.h
+TinySCF_init_free.o: Makefile TinySCF_init_free.c
 	$(CC) ${CFLAGS} ${INCS} -c TinySCF_init_free.c -o $@ 
 
 DIIS.o: Makefile DIIS.c DIIS.h TinySCF.h

@@ -10,7 +10,6 @@
 #include "CMS.h"
 #include "utils.h"
 #include "TinySCF.h"
-#include "TinySCF_init_free.h"
 
 void init_TinySCF(TinySCF_t TinySCF, char *bas_fname, char *df_bas_fname, char *xyz_fname, const int niters)
 {
@@ -142,40 +141,6 @@ void init_TinySCF(TinySCF_t TinySCF, char *bas_fname, char *df_bas_fname, char *
 	TinySCF->mem_size += (double) (DBL_SIZE * TinySCF->n_occ * TinySCF->nbasfuncs);
 	TinySCF->mem_size += (double) ((DBL_SIZE + INT_SIZE) * TinySCF->nbasfuncs);
 	
-	// Allocate memory for blocked J, K and D matrices and the offsets of each block
-	// and compute the offsets of each block of J, K and D matrices
-	size_t MN_band_mem_size  = DBL_SIZE * TinySCF->max_dim * TinySCF->nbasfuncs;
-	TinySCF->mat_block_ptr   = (int*)    ALIGN64B_MALLOC(INT_SIZE * TinySCF->nshellpairs);
-	TinySCF->J_mat_block     = (double*) ALIGN64B_MALLOC(mat_mem_size);
-	TinySCF->K_mat_block     = (double*) ALIGN64B_MALLOC(mat_mem_size);
-	TinySCF->D_mat_block     = (double*) ALIGN64B_MALLOC(mat_mem_size);
-	TinySCF->F_M_band_blocks = (double*) ALIGN64B_MALLOC(MN_band_mem_size * TinySCF->nthreads);
-	TinySCF->F_N_band_blocks = (double*) ALIGN64B_MALLOC(MN_band_mem_size * TinySCF->nthreads);
-	TinySCF->visited_Mpairs  = (int*)    ALIGN64B_MALLOC(INT_SIZE * TinySCF->nshells * TinySCF->nthreads);
-	TinySCF->visited_Npairs  = (int*)    ALIGN64B_MALLOC(INT_SIZE * TinySCF->nshells * TinySCF->nthreads);
-	assert(TinySCF->mat_block_ptr   != NULL);
-	assert(TinySCF->J_mat_block     != NULL);
-	assert(TinySCF->K_mat_block     != NULL);
-	assert(TinySCF->D_mat_block     != NULL);
-	assert(TinySCF->F_M_band_blocks != NULL);
-	assert(TinySCF->F_N_band_blocks != NULL);
-	assert(TinySCF->visited_Mpairs  != NULL);
-	assert(TinySCF->visited_Npairs  != NULL);
-	TinySCF->mem_size += (double) (3 * mat_mem_size);
-	TinySCF->mem_size += (double) (INT_SIZE * TinySCF->nshellpairs);
-	TinySCF->mem_size += (double) (2 * MN_band_mem_size * TinySCF->nthreads);
-	TinySCF->mem_size += (double) (2 * INT_SIZE * TinySCF->nshells * TinySCF->nthreads);
-	int pos = 0, idx = 0;
-	for (int i = 0; i < TinySCF->nshells; i++)
-	{
-		for (int j = 0; j < TinySCF->nshells; j++)
-		{
-			TinySCF->mat_block_ptr[idx] = pos;
-			pos += TinySCF->shell_bf_num[i] * TinySCF->shell_bf_num[j];
-			idx++;
-		}
-	}
-	
 	// Allocate memory for matrices and temporary arrays used in DIIS
 	size_t DIIS_row_memsize = DBL_SIZE * (MAX_DIIS + 1);
 	TinySCF->F0_mat    = (double*) ALIGN64B_MALLOC(mat_mem_size * MAX_DIIS);
@@ -266,16 +231,6 @@ void free_TinySCF(TinySCF_t TinySCF)
 	ALIGN64B_FREE(TinySCF->Cocc_mat);
 	ALIGN64B_FREE(TinySCF->eigval);
 	ALIGN64B_FREE(TinySCF->ev_idx);
-	
-	// Free blocked J, K and D matrices and the offsets of each block
-	ALIGN64B_FREE(TinySCF->mat_block_ptr);
-	ALIGN64B_FREE(TinySCF->J_mat_block);
-	ALIGN64B_FREE(TinySCF->K_mat_block);
-	ALIGN64B_FREE(TinySCF->D_mat_block);
-	ALIGN64B_FREE(TinySCF->F_M_band_blocks);
-	ALIGN64B_FREE(TinySCF->F_N_band_blocks);
-	ALIGN64B_FREE(TinySCF->visited_Mpairs);
-	ALIGN64B_FREE(TinySCF->visited_Npairs);
 	
 	// Free matrices and temporary arrays used in DIIS
 	ALIGN64B_FREE(TinySCF->F0_mat);
