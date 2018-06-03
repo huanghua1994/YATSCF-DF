@@ -13,7 +13,7 @@ LIBS    = ${BLAS_LIBS} ${LIBCMS_LIBFILE} ${LIBSIMINT}
 CFLAGS  = -Wall -g -O3 -qopenmp -std=gnu99 -xHost
 LDFLAGS = -L${LIBCMS_LIBFILE} -lpthread -qopenmp
 
-OBJS = utils.o build_density.o shell_quartet_list.o Accum_Fock.o build_Fock.o DIIS.o build_DF_tensor.o TinySCF.o main.o 
+OBJS = utils.o TinySCF_init_free.o build_density.o build_Fock.o DIIS.o build_DF_tensor.o TinySCF.o main.o 
 
 $(EXE): Makefile $(OBJS) ${LIBCMS_LIBFILE} ${LIBSIMINT}
 	$(CC) ${CFLAGS} ${LDFLAGS} $(OBJS) -o $(EXE) ${LIBS}
@@ -21,20 +21,17 @@ $(EXE): Makefile $(OBJS) ${LIBCMS_LIBFILE} ${LIBSIMINT}
 utils.o: Makefile utils.c utils.h
 	$(CC) ${CFLAGS} ${INCS} -c utils.c -o $@ 
 
-build_density.o: Makefile build_density.c build_density.h TinySCF.h
-	$(CC) ${CFLAGS} ${INCS} ${BLAS_LIBS} -c build_density.c -o $@ 
-
-shell_quartet_list.o: Makefile shell_quartet_list.c shell_quartet_list.h
-	$(CC) ${CFLAGS} ${INCS} -c shell_quartet_list.c -o $@ 
-
-Accum_Fock.o: Makefile Accum_Fock.h Accum_Fock.c TinySCF.h
-	$(CC) ${CFLAGS} ${INCS} -c Accum_Fock.c -o $@ 
-
-build_Fock.o: Makefile build_Fock.c build_Fock.h TinySCF.h shell_quartet_list.h
-	$(CC) ${CFLAGS} ${INCS} ${BLAS_LIBS} -c build_Fock.c -o $@ 
+TinySCF_init_free.o: Makefile TinySCF_init_free.c
+	$(CC) ${CFLAGS} ${INCS} -c TinySCF_init_free.c -o $@ 
 
 DIIS.o: Makefile DIIS.c DIIS.h TinySCF.h
 	$(CC) ${CFLAGS} ${INCS} -c DIIS.c -o $@ 
+
+build_density.o: Makefile build_density.c build_density.h TinySCF.h
+	$(CC) ${CFLAGS} ${INCS} ${BLAS_LIBS} -c build_density.c -o $@ 
+
+build_Fock.o: Makefile build_Fock.c build_Fock.h TinySCF.h 
+	$(CC) ${CFLAGS} ${INCS} ${BLAS_LIBS} -c build_Fock.c -o $@ 
 
 build_DF_tensor.o: Makefile build_DF_tensor.c build_DF_tensor.h TinySCF.h
 	$(CC) ${CFLAGS} ${INCS} ${BLAS_LIBS} -c build_DF_tensor.c -o $@ 

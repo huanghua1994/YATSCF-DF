@@ -9,7 +9,7 @@
 #include "TinySCF.h"
 #include "build_density.h"
 
-static void quickSort(double *eigval, int *ev_idx, int l, int r)
+void quickSort_eigval(double *eigval, int *ev_idx, int l, int r)
 {
 	int i = l, j = r, iswap;
 	double mid = eigval[(i + j) / 2], dswap;
@@ -30,8 +30,8 @@ static void quickSort(double *eigval, int *ev_idx, int l, int r)
 			i++;  j--;
 		}
 	}
-	if (i < r) quickSort(eigval, ev_idx, i, r);
-	if (j > l) quickSort(eigval, ev_idx, l, j);
+	if (i < r) quickSort_eigval(eigval, ev_idx, i, r);
+	if (j > l) quickSort_eigval(eigval, ev_idx, l, j);
 }
 
 void TinySCF_build_DenMat(TinySCF_t TinySCF)
@@ -58,7 +58,7 @@ void TinySCF_build_DenMat(TinySCF_t TinySCF)
 	
 	// Form the C_occ with eigenvectors corresponding to n_occ smallest eigenvalues
 	for (int i = 0; i < nbf; i++) ev_idx[i] = i;
-	quickSort(eigval, ev_idx, 0, nbf - 1);
+	quickSort_eigval(eigval, ev_idx, 0, nbf - 1);
 	for (int j = 0; j < n_occ; j++)
 		for (int i = 0; i < nbf; i++)
 			Cocc_mat[i * n_occ + j] = D_mat[i * nbf + ev_idx[j]];

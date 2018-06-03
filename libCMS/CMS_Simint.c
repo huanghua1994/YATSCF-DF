@@ -260,9 +260,13 @@ CMSStatus_t CMS_destroySimint(Simint_t simint, int show_stat)
     // Print timer and statistic info
     if (show_stat)
     {
-        printf(
-            "Timer: Simint setup, Simint ERI actual, Fock mat accum. = %lf, %lf, %lf sec\n", 
-            simint->ostei_setup, simint->ostei_actual, simint->fock_update_F
+        // printf(
+        //     "Timer: Simint setup, Simint ERI actual, Fock mat accum. = %lf, %lf, %lf sec\n", 
+        //     simint->ostei_setup, simint->ostei_actual, simint->fock_update_F
+        // );
+		printf(
+            "Timer: Simint setup, Simint ERI actual = %lf, %lf (s)\n", 
+            simint->ostei_setup, simint->ostei_actual
         );
         printf(
             "Simint statistic: avg. ket-side nprim, prim unscreened ratio, SIMD unscreened ratio = %.1lf, %.1lf %%, %.1lf %%\n",
