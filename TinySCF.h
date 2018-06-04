@@ -70,16 +70,6 @@ struct TinySCF_struct
 	double *temp_J, *temp_K;
 	int    df_nbf_16;
 	
-	// Blocked J, K and D matrices and the offsets of each block
-	double *J_mat_block;  
-	double *K_mat_block;
-	double *D_mat_block;
-	int    *mat_block_ptr;
-	double *F_M_band_blocks;  // Thread-private buffer for F_MP and F_MQ blocks with the same M
-	double *F_N_band_blocks;  // Thread-private buffer for F_NP and F_NQ blocks with the same N
-	int    *visited_Mpairs;   // Flags for marking if (M, i) is updated 
-	int    *visited_Npairs;   // Flags for marking if (N, i) is updated 
-	
 	// Matrices and arrays for DIIS
 	double *F0_mat;       // Previous X^T * F * X matrices
 	double *R_mat;        // "Residual" matrix
