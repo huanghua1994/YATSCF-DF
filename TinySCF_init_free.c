@@ -268,7 +268,7 @@ void TinySCF_init_batch_dgemm_arrays(TinySCF_t TinySCF)
 	assert(TinySCF->temp_K_c != NULL);
 	
 	// Batch dgemm arrays for mat_K construction
-	int mat_K_BS = nbf / 16;
+	int mat_K_BS = nbf / 10;
 	if (mat_K_BS < 32) mat_K_BS = 32;
 	int nblocks = (nbf + mat_K_BS - 1) / mat_K_BS;
 	int last_block_size = nbf % mat_K_BS;
@@ -335,4 +335,5 @@ void TinySCF_free_batch_dgemm_arrays(TinySCF_t TinySCF)
 	free(TinySCF->mat_K_ldb);
 	free(TinySCF->mat_K_ldc);
 }
+
 

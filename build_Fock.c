@@ -222,7 +222,8 @@ static void build_K_mat_D(TinySCF_t TinySCF, double *temp_K_t, double *K_mat_t)
 	// Build K matrix
 	// Formula: K(i, j) = sum_{k=1}^{nbf} [ dot(df_tensor(i, k, 1:df_nbf), temp_K(k, j, 1:df_nbf)) ]
 	memset(K_mat, 0, DBL_SIZE * nbf * nbf);
-	
+	int ngroups = 3;
+	if (TinySCF->mat_K_group_size[1] == 0) ngroups = 1;
 	for (int k = 0; k < nbf; k++)
 	{
 		cblas_dgemm_batch(
@@ -233,7 +234,7 @@ static void build_K_mat_D(TinySCF_t TinySCF, double *temp_K_t, double *K_mat_t)
 			(const double **) TinySCF->mat_K_b, TinySCF->mat_K_ldb,
 			TinySCF->mat_K_beta,
 			TinySCF->mat_K_c, TinySCF->mat_K_ldc,
-			3, TinySCF->mat_K_group_size
+			ngroups, TinySCF->mat_K_group_size
 		);
 		
 		size_t K_a_offset = df_nbf;
@@ -367,6 +368,8 @@ static void build_K_mat_Cocc(TinySCF_t TinySCF, double *temp_K_t, double *K_mat_
 	// Build K matrix
 	// Formula: K(i, j) = sum_{s=1}^{n_occ} [ dot(temp_K(s, i, 1:df_nbf), temp_K(s, j, 1:df_nbf)) ]
 	memset(K_mat, 0, DBL_SIZE * nbf * nbf);
+	int ngroups = 3;
+	if (TinySCF->mat_K_group_size[1] == 0) ngroups = 1;
 	for (int s = 0; s < n_occ; s++)
 	{
 		cblas_dgemm_batch(
@@ -377,7 +380,7 @@ static void build_K_mat_Cocc(TinySCF_t TinySCF, double *temp_K_t, double *K_mat_
 			(const double **) TinySCF->mat_K_b, TinySCF->mat_K_ldb,
 			TinySCF->mat_K_beta,
 			TinySCF->mat_K_c, TinySCF->mat_K_ldc,
-			3, TinySCF->mat_K_group_size
+			ngroups, TinySCF->mat_K_group_size
 		);
 		
 		size_t offset = (size_t) df_nbf * (size_t) nbf;
