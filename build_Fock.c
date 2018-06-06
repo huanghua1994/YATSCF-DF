@@ -57,20 +57,29 @@ static void build_J_mat(TinySCF_t TinySCF, double *temp_J_t, double *J_mat_t)
 		
 		// Generate temporary array for J
 		memset(temp_J_thread, 0, sizeof(double) * df_nbf);
-
-		#pragma omp for
-		for (int kl = 0; kl < nbf * nbf; kl++)
+		
+		#pragma omp for schedule(dynamic)
+		for (int k = 0; k < nbf; k++)
 		{
-			int l = kl % nbf;
-			int k = kl / nbf;
-			
-			double D_kl = D_mat[k * nbf + l];
-			size_t offset = (size_t) (l * nbf + k) * (size_t) df_nbf;
+			double D_kl = D_mat[k * nbf + k];
+			size_t offset = (size_t) (k * nbf + k) * (size_t) df_nbf;
 			double *df_tensor_row = df_tensor + offset;
 
 			#pragma simd
 			for (size_t p = 0; p < df_nbf; p++)
 				temp_J_thread[p] += D_kl * df_tensor_row[p];
+			
+			for (int l = k + 1; l < nbf; l++)
+			{
+				double D_kl = D_mat[k * nbf + l];
+				D_kl *= 2.0;
+				size_t offset = (size_t) (l * nbf + k) * (size_t) df_nbf;
+				double *df_tensor_row = df_tensor + offset;
+
+				#pragma simd
+				for (size_t p = 0; p < df_nbf; p++)
+					temp_J_thread[p] += D_kl * df_tensor_row[p];
+			}
 		}
 		
 		#pragma omp barrier
