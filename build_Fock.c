@@ -356,6 +356,7 @@ static void build_K_mat_Cocc(TinySCF_t TinySCF, double *temp_K_t, double *K_mat_
     
     // Construct temporary tensor for K matrix
     // Formula: temp_K(s, i, p) = dot(Cocc_mat(1:nbf, s), df_tensor(i, 1:nbf, p))
+    /*
     const int group_size = nbf;
     const CBLAS_TRANSPOSE temp_K_transa = CblasTrans;
     const CBLAS_TRANSPOSE temp_K_transb = CblasNoTrans;
@@ -374,6 +375,50 @@ static void build_K_mat_Cocc(TinySCF_t TinySCF, double *temp_K_t, double *K_mat_
         TinySCF->temp_K_c, &temp_K_ldc,
         1, &group_size
     );
+    */
+    double *A_ptr  = TinySCF->Cocc_mat;
+    double *temp_A = TinySCF->temp_K_A;
+    double *temp_B = TinySCF->temp_K_B;
+    int    *bf_pair_mask = TinySCF->bf_pair_mask;
+    const int temp_K_m   = n_occ;
+    const int temp_K_n   = df_nbf;
+    const int temp_K_k   = nbf;
+    const int temp_K_lda = n_occ;
+    const int temp_K_ldb = df_nbf;
+    const int temp_K_ldc = df_nbf * nbf;
+    for (int i = 0; i < nbf; i++)
+    {
+        size_t offset_b = (size_t) i * (size_t) nbf * (size_t) df_nbf;
+        size_t offset_c = (size_t) i * (size_t) df_nbf;
+        double *B_ptr = TinySCF->df_tensor + offset_b;
+        double *C_ptr = TinySCF->temp_K    + offset_c;
+        /*
+        cblas_dgemm(
+            CblasRowMajor, CblasTrans, CblasNoTrans,
+            temp_K_m, temp_K_n, temp_K_k,
+            1.0, A_ptr, temp_K_lda, B_ptr, temp_K_ldb,
+            0.0, C_ptr, temp_K_ldc
+        );
+        */
+        
+        int cnt = 0;
+        int nbf_i = i * nbf;
+        for (int j = 0; j < nbf; j++)
+        {
+            if (bf_pair_mask[nbf_i + j] >= 0)
+            {
+                memcpy(temp_A + cnt * n_occ,  A_ptr + j * n_occ,  DBL_SIZE * n_occ);
+                memcpy(temp_B + cnt * df_nbf, B_ptr + j * df_nbf, DBL_SIZE * df_nbf);
+                cnt++;
+            }
+        }
+        cblas_dgemm(
+            CblasRowMajor, CblasTrans, CblasNoTrans,
+            n_occ, df_nbf, cnt,
+            1.0, temp_A, n_occ, temp_B, df_nbf,
+            0.0, C_ptr, temp_K_ldc
+        );
+    }
     
     t1 = get_wtime_sec();
 
