@@ -42,6 +42,7 @@ static void build_J_mat(TinySCF_t TinySCF, double *temp_J_t, double *J_mat_t)
     int nbf           = TinySCF->nbasfuncs;
     int df_nbf        = TinySCF->df_nbf;
     int nthreads      = TinySCF->nthreads;
+    int *bf_pair_mask = TinySCF->bf_pair_mask;
     
     double t0, t1, t2;
     
@@ -61,24 +62,31 @@ static void build_J_mat(TinySCF_t TinySCF, double *temp_J_t, double *J_mat_t)
         #pragma omp for schedule(dynamic)
         for (int k = 0; k < nbf; k++)
         {
-            double D_kl = D_mat[k * nbf + k];
-            size_t offset = (size_t) (k * nbf + k) * (size_t) df_nbf;
-            double *df_tensor_row = df_tensor + offset;
-
-            #pragma simd
-            for (size_t p = 0; p < df_nbf; p++)
-                temp_J_thread[p] += D_kl * df_tensor_row[p];
-            
-            for (int l = k + 1; l < nbf; l++)
+            int idx_kk = k * nbf + k;
+            if (bf_pair_mask[idx_kk] >= 0)
             {
-                double D_kl = D_mat[k * nbf + l];
-                D_kl *= 2.0;
-                size_t offset = (size_t) (l * nbf + k) * (size_t) df_nbf;
+                size_t offset = (size_t) (k * nbf + k) * (size_t) df_nbf;
+                double D_kl = D_mat[idx_kk];
                 double *df_tensor_row = df_tensor + offset;
 
                 #pragma simd
                 for (size_t p = 0; p < df_nbf; p++)
                     temp_J_thread[p] += D_kl * df_tensor_row[p];
+            }
+            
+            for (int l = k + 1; l < nbf; l++)
+            {
+                int idx_kl = k * nbf + l;
+                if (bf_pair_mask[idx_kl] >= 0)
+                {
+                    size_t offset = (size_t) (l * nbf + k) * (size_t) df_nbf;
+                    double D_kl = D_mat[idx_kl] * 2.0;
+                    double *df_tensor_row = df_tensor + offset;
+
+                    #pragma simd
+                    for (size_t p = 0; p < df_nbf; p++)
+                        temp_J_thread[p] += D_kl * df_tensor_row[p];
+                }
             }
         }
         
@@ -94,13 +102,17 @@ static void build_J_mat(TinySCF_t TinySCF, double *temp_J_t, double *J_mat_t)
         {
             for (int j = i; j < nbf; j++)
             {
-                double t = 0;
-                size_t offset = (size_t) (i * nbf + j) * (size_t) df_nbf;
-                double *df_tensor_row = df_tensor + offset;
-                #pragma simd
-                for (size_t p = 0; p < df_nbf; p++)
-                    t += temp_J[p] * df_tensor_row[p];
-                J_mat[i * nbf + j] = t;
+                int idx_ij = i * nbf + j;
+                if (bf_pair_mask[idx_ij] >= 0)
+                {
+                    size_t offset = (size_t) (i * nbf + j) * (size_t) df_nbf;
+                    double *df_tensor_row = df_tensor + offset;
+                    double t = 0;
+                    #pragma simd
+                    for (size_t p = 0; p < df_nbf; p++)
+                        t += temp_J[p] * df_tensor_row[p];
+                    J_mat[i * nbf + j] = t;
+                }
             }
         }
         
