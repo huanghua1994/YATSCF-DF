@@ -10,8 +10,8 @@
 
 // Copy a block of source matrix to the destination matrix
 void copy_matrix_block(
-	double *dst, const int ldd, double *src, const int lds, 
-	const int nrows, const int ncols
+    double *dst, const int ldd, double *src, const int lds, 
+    const int nrows, const int ncols
 );
 
 // Get current wall-clock time, similar to omp_get_wtime()
