@@ -39,10 +39,14 @@ struct TinySCF_struct
     // Shell quartet screening 
     double shell_scrtol2;   // Square of the shell screening tolerance
     double max_scrval;      // == max(fabs(sp_scrval(:)))
-    double *sp_scrval;      // Square of screening values (upper bound) of each shell pair
+    double *sp_scrval;      // Screening values (upper bound) of each shell pair
+    double *bf_pair_scrval; // Screening values (ERI values) of each basis function pair
     int    *uniq_sp_lid;    // Left shell id of all unique shell pairs
     int    *uniq_sp_rid;    // Right shell id of all unique shell pairs
     double *df_sp_scrval;   // Square of screening values (upper bound) of each shell pair in density fitting
+    int    *bf_pair_mask;   // If a basis function pair survives the Schwarz screening
+    int    *bf_mask_displs; // How many basis function pairs in (i, :) survive screening and their storing order
+    int    num_bf_pair_scr; // Total number of basis function pairs that survive screening
     
     // ERIs
     Simint_t simint;        // Simint object for ERI, handled by libCMS
@@ -50,7 +54,6 @@ struct TinySCF_struct
     int *shell_bf_num;      // Number of basis function in each shell
     int *df_shell_bf_sind;  // Index of the first basis function of each shell in density fitting
     int *df_shell_bf_num;   // Number of basis function in each shell in density fitting
-    
     
     // Matrices and temporary arrays in SCF
     double *Hcore_mat;      // Core Hamiltonian matrix

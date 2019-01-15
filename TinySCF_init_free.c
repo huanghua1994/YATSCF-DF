@@ -76,16 +76,25 @@ void init_TinySCF(TinySCF_t TinySCF, char *bas_fname, char *df_bas_fname, char *
     
     // Set screening thresholds, allocate memory for shell quartet screening 
     TinySCF->shell_scrtol2 = 1e-11 * 1e-11;
-    TinySCF->sp_scrval     = (double*) ALIGN64B_MALLOC(DBL_SIZE * TinySCF->nshellpairs);
-    TinySCF->df_sp_scrval  = (double*) ALIGN64B_MALLOC(DBL_SIZE * TinySCF->df_nshells);
-    TinySCF->uniq_sp_lid   = (int*)    ALIGN64B_MALLOC(INT_SIZE * TinySCF->num_uniq_sp);
-    TinySCF->uniq_sp_rid   = (int*)    ALIGN64B_MALLOC(INT_SIZE * TinySCF->num_uniq_sp);
-    assert(TinySCF->sp_scrval     != NULL);
-    assert(TinySCF->df_sp_scrval  != NULL);
-    assert(TinySCF->uniq_sp_lid   != NULL);
-    assert(TinySCF->uniq_sp_rid   != NULL);
+    TinySCF->sp_scrval      = (double*) ALIGN64B_MALLOC(DBL_SIZE * TinySCF->nshellpairs);
+    TinySCF->bf_pair_scrval = (double*) ALIGN64B_MALLOC(DBL_SIZE * TinySCF->mat_size);
+    TinySCF->df_sp_scrval   = (double*) ALIGN64B_MALLOC(DBL_SIZE * TinySCF->df_nshells);
+    TinySCF->uniq_sp_lid    = (int*)    ALIGN64B_MALLOC(INT_SIZE * TinySCF->num_uniq_sp);
+    TinySCF->uniq_sp_rid    = (int*)    ALIGN64B_MALLOC(INT_SIZE * TinySCF->num_uniq_sp);
+    TinySCF->bf_pair_mask   = (int*)    ALIGN64B_MALLOC(INT_SIZE * TinySCF->mat_size);
+    TinySCF->bf_mask_displs = (int*)    ALIGN64B_MALLOC(INT_SIZE * (TinySCF->nbasfuncs + 1));
+    assert(TinySCF->sp_scrval      != NULL);
+    assert(TinySCF->df_sp_scrval   != NULL);
+    assert(TinySCF->uniq_sp_lid    != NULL);
+    assert(TinySCF->uniq_sp_rid    != NULL);
+    assert(TinySCF->bf_pair_mask   != NULL);
+    assert(TinySCF->bf_mask_displs != NULL);
     TinySCF->mem_size += (double) (DBL_SIZE * TinySCF->nshellpairs);
+    TinySCF->mem_size += (double) (DBL_SIZE * TinySCF->mat_size);
+    TinySCF->mem_size += (double) (DBL_SIZE * TinySCF->df_nshells);
     TinySCF->mem_size += (double) (INT_SIZE * 2 * TinySCF->num_uniq_sp);
+    TinySCF->mem_size += (double) (INT_SIZE * TinySCF->mat_size);
+    TinySCF->mem_size += (double) (INT_SIZE * (TinySCF->nbasfuncs + 1));
     
     // Initialize Simint object and shell basis function index info
     CMS_createSimint(TinySCF->basis, TinySCF->df_basis, &(TinySCF->simint), TinySCF->nthreads);
@@ -218,6 +227,8 @@ void free_TinySCF(TinySCF_t TinySCF)
     ALIGN64B_FREE(TinySCF->shell_bf_num);
     ALIGN64B_FREE(TinySCF->df_shell_bf_sind);
     ALIGN64B_FREE(TinySCF->df_shell_bf_num);
+    ALIGN64B_FREE(TinySCF->bf_pair_mask);
+    ALIGN64B_FREE(TinySCF->bf_mask_displs);
     
     // Free matrices and temporary arrays used in SCF
     ALIGN64B_FREE(TinySCF->Hcore_mat);
