@@ -242,74 +242,10 @@ static void generate_df_tensor(TinySCF_t TinySCF)
     int df_nbf   = TinySCF->df_nbf;
     int mat_K_BS = TinySCF->mat_K_BS;
 
-    /*
-    #pragma omp parallel for
-    for (size_t i = 0; i < nbf * nbf * df_nbf; i++) 
-        df_tensor[i] = 0;
-    
-    // Cannot use batch dgemm here since each time the size of A matrix is different
-    for (int M = 0; M < nbf; M++)
-    {
-        size_t offset = (size_t) (M * nbf + M) * (size_t) df_nbf;
-        double *pqA_ptr      = pqA       + offset;
-        double *df_tensor_MM = df_tensor + offset;
-        cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, nbf - M, df_nbf, df_nbf,
-                    1.0, pqA_ptr, df_nbf, Jpq, df_nbf, 0.0, df_tensor_MM, df_nbf);
-    }
-    */
-    
-    double **dft_A = (double **) malloc(sizeof(double*) * mat_K_BS);
-    double **dft_B = (double **) malloc(sizeof(double*) * mat_K_BS);
-    double **dft_C = (double **) malloc(sizeof(double*) * mat_K_BS);
-    assert(dft_A != NULL && dft_B != NULL && dft_C != NULL);
-
-    for (int M = 0; M < nbf; M += mat_K_BS)
-    {
-        int nrows = mat_K_BS;
-        if (M + nrows > nbf) nrows = nbf - M;
-        for (int i = 0; i < nrows; i++)
-        {
-            size_t offset = (size_t) ((M + i) * nbf + M) * (size_t) df_nbf;
-            dft_A[i] = pqA       + offset;
-            dft_B[i] = Jpq;
-            dft_C[i] = df_tensor + offset;
-        }
-
-        const CBLAS_TRANSPOSE dft_transa = CblasNoTrans;
-        const CBLAS_TRANSPOSE dft_transb = CblasNoTrans;
-        const int dft_m = nbf - M, dft_n = df_nbf, dft_k = df_nbf;
-        const double dft_alpha = 1.0, dft_beta = 0.0;
-        const int dft_lda = df_nbf;
-        const int dft_ldb = df_nbf;
-        const int dft_ldc = df_nbf;
-        cblas_dgemm_batch(
-            CblasRowMajor, &dft_transa, &dft_transb,
-            &dft_m, &dft_n, &dft_k, 
-            &dft_alpha,
-            (const double **) dft_A, &dft_lda,
-            (const double **) dft_B, &dft_ldb,
-            &dft_beta,
-            dft_C, &dft_ldc,
-            1, &nrows
-        );
-    }
-
-    free(dft_A);
-    free(dft_B);
-    free(dft_C);
-
-    #pragma omp parallel for schedule(dynamic)
-    for (int M = 0; M < nbf; M++)
-    {
-        for (int N = M; N < nbf; N++)
-        {
-            size_t MN_offset = (size_t) (M * nbf + N) * (size_t) df_nbf;
-            size_t NM_offset = (size_t) (N * nbf + M) * (size_t) df_nbf;
-            double *df_tensor_MN = df_tensor + MN_offset;
-            double *df_tensor_NM = df_tensor + NM_offset;
-            memcpy(df_tensor_NM, df_tensor_MN, DBL_SIZE * df_nbf);
-        }
-    }
+    cblas_dgemm(
+        CblasRowMajor, CblasNoTrans, CblasNoTrans, nbf * nbf, df_nbf, df_nbf,
+        1.0, pqA, df_nbf, Jpq, df_nbf, 0.0, df_tensor, df_nbf
+    );
 }
 
 void TinySCF_build_DF_tensor(TinySCF_t TinySCF)
