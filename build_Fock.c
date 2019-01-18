@@ -45,6 +45,9 @@ static void build_J_mat(TinySCF_t TinySCF, double *temp_J_t, double *J_mat_t)
     int *bf_pair_mask = TinySCF->bf_pair_mask;
     
     double t0, t1, t2;
+    int *bf_pair_j = TinySCF->bf_pair_j;
+    int *bf_pair_diag = TinySCF->bf_pair_diag;
+    int *bf_mask_displs = TinySCF->bf_mask_displs;
     
     #pragma omp parallel
     {
@@ -63,30 +66,28 @@ static void build_J_mat(TinySCF_t TinySCF, double *temp_J_t, double *J_mat_t)
         for (int k = 0; k < nbf; k++)
         {
             int idx_kk = k * nbf + k;
-            if (bf_pair_mask[idx_kk] >= 0)
+            
+            // Basis function pair (i, i) always survives screening
+            size_t offset = (size_t) (k * nbf + k) * (size_t) df_nbf;
+            double D_kl = D_mat[idx_kk];
+            double *df_tensor_row = df_tensor + offset;
+            #pragma simd
+            for (size_t p = 0; p < df_nbf; p++)
+                temp_J_thread[p] += D_kl * df_tensor_row[p];
+            
+            int diag_k_idx = bf_pair_diag[k];
+            int row_k_epos = bf_mask_displs[k + 1];
+            for (int l_idx = diag_k_idx + 1; l_idx < row_k_epos; l_idx++)
             {
-                size_t offset = (size_t) (k * nbf + k) * (size_t) df_nbf;
-                double D_kl = D_mat[idx_kk];
+                int l = bf_pair_j[l_idx];
+                int idx_kl = k * nbf + l;
+                size_t offset = (size_t) (l * nbf + k) * (size_t) df_nbf;
+                double D_kl = D_mat[idx_kl] * 2.0;
                 double *df_tensor_row = df_tensor + offset;
 
                 #pragma simd
                 for (size_t p = 0; p < df_nbf; p++)
                     temp_J_thread[p] += D_kl * df_tensor_row[p];
-            }
-            
-            for (int l = k + 1; l < nbf; l++)
-            {
-                int idx_kl = k * nbf + l;
-                if (bf_pair_mask[idx_kl] >= 0)
-                {
-                    size_t offset = (size_t) (l * nbf + k) * (size_t) df_nbf;
-                    double D_kl = D_mat[idx_kl] * 2.0;
-                    double *df_tensor_row = df_tensor + offset;
-
-                    #pragma simd
-                    for (size_t p = 0; p < df_nbf; p++)
-                        temp_J_thread[p] += D_kl * df_tensor_row[p];
-                }
             }
         }
         
@@ -100,19 +101,18 @@ static void build_J_mat(TinySCF_t TinySCF, double *temp_J_t, double *J_mat_t)
         #pragma omp for schedule(dynamic)
         for (int i = 0; i < nbf; i++)
         {
-            for (int j = i; j < nbf; j++)
+            int diag_i_idx = bf_pair_diag[i];
+            int row_i_epos = bf_mask_displs[i + 1];
+            for (int j_idx = diag_i_idx; j_idx < row_i_epos; j_idx++)
             {
-                int idx_ij = i * nbf + j;
-                if (bf_pair_mask[idx_ij] >= 0)
-                {
-                    size_t offset = (size_t) (i * nbf + j) * (size_t) df_nbf;
-                    double *df_tensor_row = df_tensor + offset;
-                    double t = 0;
-                    #pragma simd
-                    for (size_t p = 0; p < df_nbf; p++)
-                        t += temp_J[p] * df_tensor_row[p];
-                    J_mat[i * nbf + j] = t;
-                }
+                int j = bf_pair_j[j_idx];
+                size_t offset = (size_t) (i * nbf + j) * (size_t) df_nbf;
+                double *df_tensor_row = df_tensor + offset;
+                double t = 0;
+                #pragma simd
+                for (size_t p = 0; p < df_nbf; p++)
+                    t += temp_J[p] * df_tensor_row[p];
+                J_mat[i * nbf + j] = t;
             }
         }
         
@@ -356,30 +356,12 @@ static void build_K_mat_Cocc(TinySCF_t TinySCF, double *temp_K_t, double *K_mat_
     
     // Construct temporary tensor for K matrix
     // Formula: temp_K(s, i, p) = dot(Cocc_mat(1:nbf, s), df_tensor(i, 1:nbf, p))
-    /*
-    const int group_size = nbf;
-    const CBLAS_TRANSPOSE temp_K_transa = CblasTrans;
-    const CBLAS_TRANSPOSE temp_K_transb = CblasNoTrans;
-    const int temp_K_m = n_occ, temp_K_n = df_nbf, temp_K_k = nbf;
-    const double temp_K_alpha = 1.0, temp_K_beta = 0.0;
-    const int temp_K_lda = n_occ;
-    const int temp_K_ldb = df_nbf;
-    const int temp_K_ldc = df_nbf * nbf;
-    cblas_dgemm_batch(
-        CblasRowMajor, &temp_K_transa, &temp_K_transb, 
-        &temp_K_m, &temp_K_n, &temp_K_k,
-        &temp_K_alpha,
-        (const double **) TinySCF->temp_K_a, &temp_K_lda,
-        (const double **) TinySCF->temp_K_b, &temp_K_ldb,
-        &temp_K_beta,
-        TinySCF->temp_K_c, &temp_K_ldc,
-        1, &group_size
-    );
-    */
     double *A_ptr  = TinySCF->Cocc_mat;
     double *temp_A = TinySCF->temp_K_A;
     double *temp_B = TinySCF->temp_K_B;
-    int    *bf_pair_mask = TinySCF->bf_pair_mask;
+    int    *bf_pair_mask   = TinySCF->bf_pair_mask;
+    int    *bf_pair_j      = TinySCF->bf_pair_j;
+    int    *bf_mask_displs = TinySCF->bf_mask_displs;
     const int temp_K_m   = n_occ;
     const int temp_K_n   = df_nbf;
     const int temp_K_k   = nbf;
@@ -392,26 +374,20 @@ static void build_K_mat_Cocc(TinySCF_t TinySCF, double *temp_K_t, double *K_mat_
         size_t offset_c = (size_t) i * (size_t) df_nbf;
         double *B_ptr = TinySCF->df_tensor + offset_b;
         double *C_ptr = TinySCF->temp_K    + offset_c;
-        /*
-        cblas_dgemm(
-            CblasRowMajor, CblasTrans, CblasNoTrans,
-            temp_K_m, temp_K_n, temp_K_k,
-            1.0, A_ptr, temp_K_lda, B_ptr, temp_K_ldb,
-            0.0, C_ptr, temp_K_ldc
-        );
-        */
         
         int cnt = 0;
         int nbf_i = i * nbf;
-        for (int j = 0; j < nbf; j++)
+        
+        int j_idx_spos = bf_mask_displs[i];
+        int j_idx_epos = bf_mask_displs[i + 1];
+        for (int j_idx = j_idx_spos; j_idx < j_idx_epos; j_idx++)
         {
-            if (bf_pair_mask[nbf_i + j] >= 0)
-            {
-                memcpy(temp_A + cnt * n_occ,  A_ptr + j * n_occ,  DBL_SIZE * n_occ);
-                memcpy(temp_B + cnt * df_nbf, B_ptr + j * df_nbf, DBL_SIZE * df_nbf);
-                cnt++;
-            }
+            int j = bf_pair_j[j_idx];
+            memcpy(temp_A + cnt * n_occ,  A_ptr + j * n_occ,  DBL_SIZE * n_occ);
+            memcpy(temp_B + cnt * df_nbf, B_ptr + j * df_nbf, DBL_SIZE * df_nbf);
+            cnt++;
         }
+        
         cblas_dgemm(
             CblasRowMajor, CblasTrans, CblasNoTrans,
             n_occ, df_nbf, cnt,

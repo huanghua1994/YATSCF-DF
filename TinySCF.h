@@ -45,6 +45,8 @@ struct TinySCF_struct
     int    *uniq_sp_rid;    // Right shell id of all unique shell pairs
     double *df_sp_scrval;   // Square of screening values (upper bound) of each shell pair in density fitting
     int    *bf_pair_mask;   // If a basis function pair survives the Schwarz screening
+    int    *bf_pair_j;      // j of basis function pair (i, j) that survives screening
+    int    *bf_pair_diag;   // Index of basis function pair (i, i) in all basis function pairs 
     int    *bf_mask_displs; // How many basis function pairs in (i, :) survive screening and their storing order
     int    num_bf_pair_scr; // Total number of basis function pairs that survive screening
     

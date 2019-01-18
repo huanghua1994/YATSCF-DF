@@ -221,6 +221,8 @@ void TinySCF_compute_sq_Schwarz_scrvals(TinySCF_t TinySCF)
     
     int bf_pair_nnz = 0;
     int *bf_pair_mask = TinySCF->bf_pair_mask;
+    int *bf_pair_j    = TinySCF->bf_pair_j;
+    int *bf_pair_diag = TinySCF->bf_pair_diag;
     int *bf_mask_displs = TinySCF->bf_mask_displs;
     bf_mask_displs[0] = 0;
     for (int i = 0; i < nbf; i++)
@@ -231,11 +233,13 @@ void TinySCF_compute_sq_Schwarz_scrvals(TinySCF_t TinySCF)
             if (bf_pair_scrval[offset_i + j] > eta)
             {
                 bf_pair_mask[offset_i + j] = bf_pair_nnz;
+                bf_pair_j[bf_pair_nnz] = j;
                 bf_pair_nnz++;
             } else {
                 bf_pair_mask[offset_i + j] = -1;
             }
         }
+        bf_pair_diag[i] = bf_pair_mask[offset_i + i];  // (i, i) always survives screening
         bf_mask_displs[i + 1] = bf_pair_nnz;
     }
     
