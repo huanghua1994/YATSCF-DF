@@ -208,27 +208,51 @@ static void build_K_mat_D(TinySCF_t TinySCF, double *temp_K_t, double *K_mat_t)
     
     t0 = get_wtime_sec();
     
+    // TODO: Optimize this transpose
+    double *DT = (double*) malloc(DBL_SIZE * nbf * nbf);
+    #pragma omp parallel for
+    for (int i = 0; i < nbf; i++)
+    {
+        double *DT_row = DT + i * nbf;
+        double *D_mat_col = D_mat + i;
+        #pragma omp simd
+        for (int j = 0; j < nbf; j++)
+            DT_row[j] = D_mat_col[j * nbf];
+    }
+    
     // Construct temporary tensor for K matrix
     // Formula: temp_K(k, j, p) = dot(D_mat(k, 1:nbf), df_tensor(1:nbf, j, p))
-    const int group_size = nbf;
-    const CBLAS_TRANSPOSE temp_K_transa = CblasNoTrans;
-    const CBLAS_TRANSPOSE temp_K_transb = CblasNoTrans;
-    const int temp_K_m = nbf, temp_K_n = df_nbf, temp_K_k = nbf;
-    const double temp_K_alpha = 1.0, temp_K_beta = 0.0;
-    const int temp_K_lda = nbf;
-    const int temp_K_ldb = nbf * df_nbf;
-    const int temp_K_ldc = nbf * df_nbf;
-    cblas_dgemm_batch(
-        CblasRowMajor, &temp_K_transa, &temp_K_transb, 
-        &temp_K_m, &temp_K_n, &temp_K_k, 
-        &temp_K_alpha, 
-        (const double **) TinySCF->temp_K_a, &temp_K_lda,
-        (const double **) TinySCF->temp_K_b, &temp_K_ldb,
-        &temp_K_beta,
-        TinySCF->temp_K_c, &temp_K_ldc,
-        1, &group_size
-    );
-
+    int *bf_pair_mask = TinySCF->bf_pair_mask;
+    double *temp_K_A = TinySCF->temp_K_A;
+    double *temp_K_B = TinySCF->temp_K_B;
+    for (int j = 0; j < nbf; j++)
+    {
+        size_t offset_c = (size_t) j * (size_t) df_nbf;
+        size_t ldC = (size_t) nbf * (size_t) df_nbf;
+        double *C_ptr = temp_K + offset_c;
+        double *B_ptr = df_tensor + offset_c;
+        
+        int cnt = 0;
+        for (int l = 0; l < nbf; l++)
+        {
+            if (bf_pair_mask[l * nbf + j] >= 0)
+            {
+                memcpy(temp_K_A + cnt * nbf, DT + l * nbf, DBL_SIZE * nbf);
+                memcpy(temp_K_B + cnt * df_nbf, B_ptr + l * ldC, DBL_SIZE * df_nbf);
+                cnt++;
+            }
+        }
+        
+        cblas_dgemm(
+            CblasRowMajor, CblasTrans, CblasNoTrans,
+            nbf, df_nbf, cnt,
+            1.0, temp_K_A, nbf, temp_K_B, df_nbf, 
+            0.0, C_ptr, ldC
+        );
+    }
+    
+    free(DT);
+    
     t1 = get_wtime_sec();
     
     // Build K matrix

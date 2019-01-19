@@ -189,7 +189,7 @@ void init_TinySCF(TinySCF_t TinySCF, char *bas_fname, char *df_bas_fname, char *
     size_t temp_K_memsize   = (size_t) TinySCF->mat_size  * (size_t) TinySCF->df_nbf;
     size_t tensor_memsize   = (size_t) TinySCF->mat_size  * (size_t) TinySCF->df_nbf;
     size_t df_mat_memsize   = (size_t) TinySCF->df_nbf    * (size_t) TinySCF->df_nbf;
-    size_t temp_K_A_memsize = (size_t) TinySCF->n_occ     * (size_t) TinySCF->nbasfuncs;
+    size_t temp_K_A_memsize = (size_t) TinySCF->nbasfuncs * (size_t) TinySCF->nbasfuncs;
     size_t temp_K_B_memsize = (size_t) TinySCF->df_nbf    * (size_t) TinySCF->nbasfuncs;
     tensor_memsize   *= DBL_SIZE;
     df_mat_memsize   *= DBL_SIZE;
