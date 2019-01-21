@@ -204,6 +204,8 @@ void init_TinySCF(TinySCF_t TinySCF, char *bas_fname, char *df_bas_fname, char *
     TinySCF->temp_K    = (double*) ALIGN64B_MALLOC(temp_K_memsize);
     TinySCF->temp_K_A  = (double*) ALIGN64B_MALLOC(temp_K_A_memsize);
     TinySCF->temp_K_B  = (double*) ALIGN64B_MALLOC(temp_K_B_memsize);
+    TinySCF->pqA0      = NULL;
+    TinySCF->df_tensor0 = NULL;
     assert(TinySCF->pqA       != NULL);
     assert(TinySCF->df_tensor != NULL);
     assert(TinySCF->Jpq       != NULL);
@@ -278,6 +280,8 @@ void free_TinySCF(TinySCF_t TinySCF)
     ALIGN64B_FREE(TinySCF->df_tensor);
     ALIGN64B_FREE(TinySCF->temp_K_A);
     ALIGN64B_FREE(TinySCF->temp_K_B);
+    ALIGN64B_FREE(TinySCF->pqA0);
+    ALIGN64B_FREE(TinySCF->df_tensor0);
     
     // Free BasisSet_t and Simint_t object, require Simint_t object print stat info
     CMS_destroyBasisSet(TinySCF->basis);

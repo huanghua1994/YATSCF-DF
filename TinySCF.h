@@ -74,6 +74,7 @@ struct TinySCF_struct
     double *pqA, *Jpq, *df_tensor;
     double *temp_J, *temp_K;
     double *temp_K_A, *temp_K_B;
+    double *pqA0, *df_tensor0;
     int    df_nbf_16;
     
     // Matrices and arrays for DIIS

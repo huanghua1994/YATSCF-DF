@@ -249,6 +249,13 @@ void TinySCF_compute_sq_Schwarz_scrvals(TinySCF_t TinySCF)
     double et = get_wtime_sec();
     TinySCF->shell_scr_time = et - st;
     
+    size_t tensor_memsize = (size_t) bf_pair_nnz * (size_t) TinySCF->df_nbf * DBL_SIZE;
+    TinySCF->pqA0       = (double*) ALIGN64B_MALLOC(tensor_memsize);
+    TinySCF->df_tensor0 = (double*) ALIGN64B_MALLOC(tensor_memsize);
+    assert(TinySCF->pqA0       != NULL);
+    assert(TinySCF->df_tensor0 != NULL);
+    TinySCF->mem_size += (double) tensor_memsize * 2;
+    
     // Print runtime
     printf("TinySCF precompute shell screening info over,      elapsed time = %.3lf (s)\n", TinySCF->shell_scr_time);
     printf("#### Sparsity of shell / basis function pairs = %lf, %lf\n", sp_sparsity, bf_pair_sparsity);
