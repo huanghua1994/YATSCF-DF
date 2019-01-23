@@ -10,6 +10,7 @@
 #include "utils.h"
 #include "TinySCF.h"
 #include "build_Fock.h"
+#include "build_density.h"
 
 void reduce_temp_J(double *temp_J, double *temp_J_thread, int len, int tid, int nthreads)
 {
@@ -478,6 +479,37 @@ static void build_K_mat_Cocc(TinySCF_t TinySCF, double *temp_K_t, double *K_mat_
     *K_mat_t  = t2 - t1;
 }
 
+void TinySCF_D2Cocc(TinySCF_t TinySCF)
+{
+    double *D_mat    = TinySCF->D_mat;
+    double *Chol_mat = TinySCF->tmp_mat;
+    double *Cocc_mat = TinySCF->Cocc_mat;
+    int    nbf       = TinySCF->nbasfuncs;
+    int    n_occ     = TinySCF->n_occ;
+    
+    memcpy(Chol_mat, D_mat, DBL_SIZE * TinySCF->mat_size);
+    
+    int *piv = (int*) malloc(sizeof(int) * nbf);
+    int rank;
+    LAPACKE_dpstrf(LAPACK_ROW_MAJOR, 'L', nbf, Chol_mat, nbf, piv, &rank, 1e-12);
+    
+    for (int i = 0; i < n_occ; i++)
+    {
+        double *Cocc_row = Cocc_mat + i * n_occ;
+        double *Chol_row = Chol_mat + i * nbf;
+        for (int j = 0; j < i; j++) Cocc_row[j] = Chol_row[j];
+        for (int j = i; j < n_occ; j++) Cocc_row[j] = 0.0;
+    }
+    for (int i = n_occ; i < nbf; i++)
+    {
+        double *Cocc_row = Cocc_mat + i * n_occ;
+        double *Chol_row = Chol_mat + i * nbf;
+        for (int j = 0; j < n_occ; j++) Cocc_row[j] = Chol_row[j];
+    }
+    
+    free(piv);
+}
+
 void TinySCF_build_FockMat(TinySCF_t TinySCF)
 {
     double *Hcore_mat = TinySCF->Hcore_mat;
@@ -496,9 +528,12 @@ void TinySCF_build_FockMat(TinySCF_t TinySCF)
     // Build K matrix
     if (TinySCF->iter == 0)  // Use the initial guess D for 1st iteration
     {
-        set_batch_dgemm_arrays_D(TinySCF);
-        build_K_mat_D(TinySCF, &temp_K_t, &K_mat_t);
+        //set_batch_dgemm_arrays_D(TinySCF);
+        //build_K_mat_D(TinySCF, &temp_K_t, &K_mat_t);
+        
+        TinySCF_D2Cocc(TinySCF);
         set_batch_dgemm_arrays_Cocc(TinySCF);
+        build_K_mat_Cocc(TinySCF, &temp_K_t, &K_mat_t);
     } else {
         build_K_mat_Cocc(TinySCF, &temp_K_t, &K_mat_t);
     }
