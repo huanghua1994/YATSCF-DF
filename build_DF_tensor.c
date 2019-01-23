@@ -13,7 +13,7 @@
 
 static void copy_3center_integral_results(
     int thread_npairs, int *thread_P_list, int thread_nints, double *thread_integrals, 
-    int *df_shell_bf_sind, double *pqA, double *pqA0, int *bf_pair_mask, int nbf, int df_nbf,
+    int *df_shell_bf_sind, double *pqA, int *bf_pair_mask, int nbf, int df_nbf,
     int startM, int endM, int startN, int endN, int dimN
 )
 {
@@ -32,21 +32,15 @@ static void copy_3center_integral_results(
             {
                 int in = iN - startN;
                 double *eri_ptr = integrals + (im * dimN + in) * dimP;
-                size_t pqA_offset0 = (size_t) (iM * nbf + iN) * (size_t) df_nbf + (size_t) startP;
-                size_t pqA_offset1 = (size_t) (iN * nbf + iM) * (size_t) df_nbf + (size_t) startP;
+                
+                int iMN_pair_idx = bf_pair_mask[iM * nbf + iN];
+                int iNM_pair_idx = bf_pair_mask[iN * nbf + iM];
+                size_t pqA_offset0 = (size_t) iMN_pair_idx * (size_t) df_nbf + (size_t) startP;
+                size_t pqA_offset1 = (size_t) iNM_pair_idx * (size_t) df_nbf + (size_t) startP;
                 double *pqA_ptr0 = pqA + pqA_offset0;
                 double *pqA_ptr1 = pqA + pqA_offset1;
                 memcpy(pqA_ptr0, eri_ptr, row_mem_size);
                 memcpy(pqA_ptr1, eri_ptr, row_mem_size);
-                
-                int iMN_pair_idx = bf_pair_mask[iM * nbf + iN];
-                int iNM_pair_idx = bf_pair_mask[iN * nbf + iM];
-                size_t pqA0_offset0 = (size_t) iMN_pair_idx * (size_t) df_nbf + (size_t) startP;
-                size_t pqA0_offset1 = (size_t) iNM_pair_idx * (size_t) df_nbf + (size_t) startP;
-                double *pqA0_ptr0 = pqA0 + pqA0_offset0;
-                double *pqA0_ptr1 = pqA0 + pqA0_offset1;
-                memcpy(pqA0_ptr0, eri_ptr, row_mem_size);
-                memcpy(pqA0_ptr1, eri_ptr, row_mem_size);
             }
         }
     }
@@ -67,12 +61,10 @@ static void calc_DF_3center_integrals(TinySCF_t TinySCF)
     double *sp_scrval     = TinySCF->sp_scrval;
     double *df_sp_scrval  = TinySCF->df_sp_scrval;
     double scrtol2        = TinySCF->shell_scrtol2;
+    int *bf_pair_mask     = TinySCF->bf_pair_mask;
     
     int *P_lists = (int*) malloc(sizeof(int) * _Simint_NSHELL_SIMD * TinySCF->nthreads);
     assert(P_lists != NULL);
-    
-    int *bf_pair_mask = TinySCF->bf_pair_mask;
-    double *pqA0 = TinySCF->pqA0;
     
     #pragma omp parallel 
     {
@@ -122,7 +114,7 @@ static void calc_DF_3center_integrals(TinySCF_t TinySCF)
                         {
                             copy_3center_integral_results(
                                 thread_npairs, thread_P_list, thread_nints, thread_integrals,
-                                df_shell_bf_sind, pqA, pqA0, bf_pair_mask, nbf, df_nbf,
+                                df_shell_bf_sind, pqA, bf_pair_mask, nbf, df_nbf,
                                 startM, endM, startN, endN, dimN
                             );
                         }
@@ -143,7 +135,7 @@ static void calc_DF_3center_integrals(TinySCF_t TinySCF)
                     {
                         copy_3center_integral_results(
                             thread_npairs, thread_P_list, thread_nints, thread_integrals,
-                            df_shell_bf_sind, pqA, pqA0, bf_pair_mask, nbf, df_nbf,
+                            df_shell_bf_sind, pqA, bf_pair_mask, nbf, df_nbf,
                             startM, endM, startN, endN, dimN
                         );
                     }
@@ -247,24 +239,17 @@ static void calc_inverse_sqrt_Jpq(TinySCF_t TinySCF)
 // Formula: df_tensor(i, j, k) = dot(pqA(i, j, 1:df_nbf), Jpq_invsqrt(1:df_nbf, k))
 static void generate_df_tensor(TinySCF_t TinySCF)
 {
-    double *df_tensor = TinySCF->df_tensor;
-    double *pqA  = TinySCF->pqA;
     double *Jpq  = TinySCF->Jpq;
+    double *pqA  = TinySCF->pqA;
+    double *df_tensor = TinySCF->df_tensor;
     int nbf      = TinySCF->nbasfuncs;
     int df_nbf   = TinySCF->df_nbf;
-    int mat_K_BS = TinySCF->mat_K_BS;
-
-    cblas_dgemm(
-        CblasRowMajor, CblasNoTrans, CblasNoTrans, nbf * nbf, df_nbf, df_nbf,
-        1.0, pqA, df_nbf, Jpq, df_nbf, 0.0, df_tensor, df_nbf
-    );
     
     int bf_pair_cnt = TinySCF->bf_mask_displs[nbf];
-    double *df_tensor0 = TinySCF->df_tensor0;
-    double *pqA0  = TinySCF->pqA0;
+    
     cblas_dgemm(
         CblasRowMajor, CblasNoTrans, CblasNoTrans, bf_pair_cnt, df_nbf, df_nbf,
-        1.0, pqA0, df_nbf, Jpq, df_nbf, 0.0, df_tensor0, df_nbf
+        1.0, pqA, df_nbf, Jpq, df_nbf, 0.0, df_tensor, df_nbf
     );
 }
 

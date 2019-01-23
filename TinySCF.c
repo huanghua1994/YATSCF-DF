@@ -250,15 +250,17 @@ void TinySCF_compute_sq_Schwarz_scrvals(TinySCF_t TinySCF)
     TinySCF->shell_scr_time = et - st;
     
     size_t tensor_memsize = (size_t) bf_pair_nnz * (size_t) TinySCF->df_nbf * DBL_SIZE;
-    TinySCF->pqA0       = (double*) ALIGN64B_MALLOC(tensor_memsize);
-    TinySCF->df_tensor0 = (double*) ALIGN64B_MALLOC(tensor_memsize);
-    assert(TinySCF->pqA0       != NULL);
-    assert(TinySCF->df_tensor0 != NULL);
+    TinySCF->pqA       = (double*) ALIGN64B_MALLOC(tensor_memsize);
+    TinySCF->df_tensor = (double*) ALIGN64B_MALLOC(tensor_memsize);
+    assert(TinySCF->pqA       != NULL);
+    assert(TinySCF->df_tensor != NULL);
     TinySCF->mem_size += (double) tensor_memsize * 2;
     
-    // Print runtime
+    // Print runtime, memory usage and time consumption
     printf("TinySCF precompute shell screening info over,      elapsed time = %.3lf (s)\n", TinySCF->shell_scr_time);
-    printf("#### Sparsity of shell / basis function pairs = %lf, %lf\n", sp_sparsity, bf_pair_sparsity);
+    printf("TinySCF memory allocation and initialization over, elapsed time = %.3lf (s)\n", TinySCF->init_time);
+    printf("TinySCF regular + density fitting memory usage = %.2lf MB \n", TinySCF->mem_size / 1048576.0);
+    printf("#### Sparsity of basis function pairs = %lf, %lf\n", sp_sparsity, bf_pair_sparsity);
 }
 
 void TinySCF_get_initial_guess(TinySCF_t TinySCF)

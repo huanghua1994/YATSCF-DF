@@ -197,23 +197,18 @@ void init_TinySCF(TinySCF_t TinySCF, char *bas_fname, char *df_bas_fname, char *
     temp_K_memsize   *= DBL_SIZE;
     temp_K_A_memsize *= DBL_SIZE;
     temp_K_B_memsize *= DBL_SIZE;
-    TinySCF->pqA       = (double*) ALIGN64B_MALLOC(tensor_memsize);
-    TinySCF->df_tensor = (double*) ALIGN64B_MALLOC(tensor_memsize);
     TinySCF->Jpq       = (double*) ALIGN64B_MALLOC(df_mat_memsize);
     TinySCF->temp_J    = (double*) ALIGN64B_MALLOC(temp_J_memsize);
     TinySCF->temp_K    = (double*) ALIGN64B_MALLOC(temp_K_memsize);
     TinySCF->temp_K_A  = (double*) ALIGN64B_MALLOC(temp_K_A_memsize);
     TinySCF->temp_K_B  = (double*) ALIGN64B_MALLOC(temp_K_B_memsize);
-    TinySCF->pqA0      = NULL;
-    TinySCF->df_tensor0 = NULL;
-    assert(TinySCF->pqA       != NULL);
-    assert(TinySCF->df_tensor != NULL);
+    TinySCF->pqA       = NULL;
+    TinySCF->df_tensor = NULL;
     assert(TinySCF->Jpq       != NULL);
     assert(TinySCF->temp_J    != NULL);
     assert(TinySCF->temp_K    != NULL);
     assert(TinySCF->temp_K_A  != NULL);
     assert(TinySCF->temp_K_B  != NULL);
-    TinySCF->mem_size += (double) tensor_memsize * 2;
     TinySCF->mem_size += (double) df_mat_memsize;
     TinySCF->mem_size += (double) temp_J_memsize;
     TinySCF->mem_size += (double) temp_K_memsize;
@@ -222,10 +217,6 @@ void init_TinySCF(TinySCF_t TinySCF, char *bas_fname, char *df_bas_fname, char *
     
     double et = get_wtime_sec();
     TinySCF->init_time = et - st;
-    
-    // Print memory usage and time consumption
-    printf("TinySCF memory usage    = %.2lf MB\n", TinySCF->mem_size / 1048576.0);
-    printf("TinySCF memory allocation and initialization over, elapsed time = %.3lf (s)\n", TinySCF->init_time);
 }
 
 
@@ -273,15 +264,13 @@ void free_TinySCF(TinySCF_t TinySCF)
     ALIGN64B_FREE(TinySCF->DIIS_ipiv);
 
     // Free density fitting tensors and buffers
-    ALIGN64B_FREE(TinySCF->pqA);
     ALIGN64B_FREE(TinySCF->Jpq);
     ALIGN64B_FREE(TinySCF->temp_J);
     ALIGN64B_FREE(TinySCF->temp_K);
-    ALIGN64B_FREE(TinySCF->df_tensor);
     ALIGN64B_FREE(TinySCF->temp_K_A);
     ALIGN64B_FREE(TinySCF->temp_K_B);
-    ALIGN64B_FREE(TinySCF->pqA0);
-    ALIGN64B_FREE(TinySCF->df_tensor0);
+    ALIGN64B_FREE(TinySCF->pqA);
+    ALIGN64B_FREE(TinySCF->df_tensor);
     
     // Free BasisSet_t and Simint_t object, require Simint_t object print stat info
     CMS_destroyBasisSet(TinySCF->basis);
