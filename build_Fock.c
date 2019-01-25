@@ -134,18 +134,8 @@ static void set_batch_dgemm_arrays_Cocc(TinySCF_t TinySCF)
     int nbf    = TinySCF->nbasfuncs;
     int df_nbf = TinySCF->df_nbf;
     int n_occ  = TinySCF->n_occ;
-    
-    for (int i = 0; i < nbf; i++)
-    {
-        size_t offset_b = (size_t) i * (size_t) nbf * (size_t) df_nbf;
-        size_t offset_c = (size_t) i * (size_t) df_nbf;
-        TinySCF->temp_K_a[i] = TinySCF->Cocc_mat;
-        TinySCF->temp_K_b[i] = TinySCF->df_tensor + offset_b;
-        TinySCF->temp_K_c[i] = TinySCF->temp_K    + offset_c;
-    }
-    
     int *group_size = TinySCF->mat_K_group_size;
-    int mat_K_BS    = TinySCF->mat_K_BS;
+    int mat_K_BS = TinySCF->mat_K_BS;
     int cnt0 = 0, cnt1 = group_size[0];
     int cnt2 = group_size[0] + group_size[1];
     for (int i = 0; i < nbf; i += mat_K_BS)
@@ -155,9 +145,8 @@ static void set_batch_dgemm_arrays_Cocc(TinySCF_t TinySCF)
         {
             int j_len = mat_K_BS < (nbf - j) ? mat_K_BS : (nbf - j);
             
-            // Use k = 0 as initial pointer position
-            size_t offset_i0 = (size_t) i * (size_t) df_nbf;
-            size_t offset_j0 = (size_t) j * (size_t) df_nbf;
+            size_t offset_i0 = (size_t) i * (size_t) n_occ * (size_t) df_nbf;
+            size_t offset_j0 = (size_t) j * (size_t) n_occ * (size_t) df_nbf;
             double *K_ij     = TinySCF->K_mat  + i * nbf + j;
             double *temp_K_i = TinySCF->temp_K + offset_i0;
             double *temp_K_j = TinySCF->temp_K + offset_j0;
@@ -184,14 +173,14 @@ static void set_batch_dgemm_arrays_Cocc(TinySCF_t TinySCF)
             TinySCF->mat_K_transb[gid] = CblasTrans;
             TinySCF->mat_K_m[gid]      = i_len;
             TinySCF->mat_K_n[gid]      = j_len;
-            TinySCF->mat_K_k[gid]      = df_nbf;
+            TinySCF->mat_K_k[gid]      = n_occ * df_nbf;
             TinySCF->mat_K_alpha[gid]  = 1.0;
-            TinySCF->mat_K_beta[gid]   = 1.0;
+            TinySCF->mat_K_beta[gid]   = 0.0;
             TinySCF->mat_K_a[cnt]      = temp_K_i;
             TinySCF->mat_K_b[cnt]      = temp_K_j;
             TinySCF->mat_K_c[cnt]      = K_ij;
-            TinySCF->mat_K_lda[gid]    = df_nbf;
-            TinySCF->mat_K_ldb[gid]    = df_nbf;
+            TinySCF->mat_K_lda[gid]    = n_occ * df_nbf;
+            TinySCF->mat_K_ldb[gid]    = n_occ * df_nbf;
             TinySCF->mat_K_ldc[gid]    = nbf;
         }
     }
@@ -247,13 +236,28 @@ static void build_K_mat_Cocc(TinySCF_t TinySCF, double *temp_K_t, double *K_mat_
 
     // Build K matrix
     // Formula: K(i, j) = sum_{s=1}^{n_occ} [ dot(temp_K(i, s, 1:df_nbf), temp_K(j, s, 1:df_nbf)) ]
-    memset(K_mat, 0, DBL_SIZE * nbf * nbf);
-    cblas_dgemm(
-        CblasRowMajor, CblasNoTrans, CblasTrans,
-        nbf, nbf, n_occ * df_nbf, 
-        1.0, temp_K, n_occ * df_nbf, temp_K, n_occ * df_nbf,
-        0.0, K_mat, nbf
-    );
+    if (nbf <= 1024)
+    {    
+        cblas_dgemm(
+            CblasRowMajor, CblasNoTrans, CblasTrans,
+            nbf, nbf, n_occ * df_nbf, 
+            1.0, temp_K, n_occ * df_nbf, temp_K, n_occ * df_nbf,
+            0.0, K_mat, nbf
+        );
+    } else {            
+        int ngroups = 3;
+        if (TinySCF->mat_K_group_size[1] == 0) ngroups = 1;
+        cblas_dgemm_batch(
+            CblasRowMajor, TinySCF->mat_K_transa, TinySCF->mat_K_transb,
+            TinySCF->mat_K_m, TinySCF->mat_K_n, TinySCF->mat_K_k,
+            TinySCF->mat_K_alpha,  
+            (const double **) TinySCF->mat_K_a, TinySCF->mat_K_lda,
+            (const double **) TinySCF->mat_K_b, TinySCF->mat_K_ldb,
+            TinySCF->mat_K_beta,
+            TinySCF->mat_K_c, TinySCF->mat_K_ldc,
+            ngroups, TinySCF->mat_K_group_size
+        );
+    }
     
     t2 = get_wtime_sec();
     
