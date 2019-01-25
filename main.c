@@ -33,6 +33,8 @@ int main(int argc, char **argv)
     
     TinySCF_compute_sq_Schwarz_scrvals(TinySCF);
     
+    TinySCF_prepare_sparsity(TinySCF);
+    
     TinySCF_get_initial_guess(TinySCF);
     
     TinySCF_build_DF_tensor(TinySCF);

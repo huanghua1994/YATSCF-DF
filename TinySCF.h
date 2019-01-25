@@ -39,6 +39,7 @@ struct TinySCF_struct
     // Shell quartet screening 
     double shell_scrtol2;   // Square of the shell screening tolerance
     double max_scrval;      // == max(fabs(sp_scrval(:)))
+    double max_df_scrval;   // Maximum screening value of density fitting basis sets
     double *sp_scrval;      // Screening values (upper bound) of each shell pair
     double *bf_pair_scrval; // Screening values (ERI values) of each basis function pair
     int    *uniq_sp_lid;    // Left shell id of all unique shell pairs
@@ -88,14 +89,12 @@ struct TinySCF_struct
     double DIIS_bmax;     // The largest 2-norm of the stored F matrices' residuals
     
     // MKL batch dgemm arrays
-    double **temp_K_a, **temp_K_b, **temp_K_c;
-
     int mat_K_BS, mat_K_group_size[3], mat_K_ntiles;
     CBLAS_TRANSPOSE *mat_K_transa, *mat_K_transb;
-    int *mat_K_m, *mat_K_n, *mat_K_k;
+    int *mat_K_m,   *mat_K_n,   *mat_K_k;
+    int *mat_K_lda, *mat_K_ldb, *mat_K_ldc;
     double *mat_K_alpha, *mat_K_beta;
     double **mat_K_a, **mat_K_b, **mat_K_c;
-    int *mat_K_lda, *mat_K_ldb, *mat_K_ldc;
     
     // Statistic 
     double mem_size, init_time, S_Hcore_time, shell_scr_time;
@@ -129,6 +128,9 @@ void TinySCF_compute_Hcore_Ovlp_mat(TinySCF_t TinySCF);
 // Compute the screening values of each shell quartet and the unique shell pairs
 // that survive screening using Schwarz inequality
 void TinySCF_compute_sq_Schwarz_scrvals(TinySCF_t TinySCF);
+
+// Prepare to use the sparsity of regular basis set shell pairs
+void TinySCF_prepare_sparsity(TinySCF_t TinySCF);
 
 // Generate initial guess for density matrix using SAD data (handled by libcint)
 void TinySCF_get_initial_guess(TinySCF_t TinySCF);

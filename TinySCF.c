@@ -173,13 +173,14 @@ void TinySCF_compute_sq_Schwarz_scrvals(TinySCF_t TinySCF)
         TinySCF->df_sp_scrval[i] = df_scrval;
         if (df_scrval > global_max_df_scrval) global_max_df_scrval = df_scrval;
     }
+    TinySCF->max_df_scrval = global_max_df_scrval;
     
     // Reset Simint statistic info
     CMS_Simint_resetStatisInfo(TinySCF->simint);
     
     // Generate unique shell pairs that survive Schwarz screening
     // eta is the threshold for screening a shell pair
-    double eta = TinySCF->shell_scrtol2 / global_max_df_scrval;
+    double eta = TinySCF->shell_scrtol2 / TinySCF->max_df_scrval;
     int *uniq_sp_lid = TinySCF->uniq_sp_lid;
     int *uniq_sp_rid = TinySCF->uniq_sp_rid;
     int sp_nnz = 0;
@@ -219,6 +220,19 @@ void TinySCF_compute_sq_Schwarz_scrvals(TinySCF_t TinySCF)
     TinySCF->num_uniq_sp = sp_nnz;
     quickSort_MNpair(TinySCF->uniq_sp_lid, TinySCF->uniq_sp_rid, 0, sp_nnz - 1);
     
+    double et = get_wtime_sec();
+    TinySCF->shell_scr_time = et - st;
+    printf("TinySCF precompute shell screening info over,      elapsed time = %.3lf (s)\n", TinySCF->shell_scr_time);
+}
+    
+void TinySCF_prepare_sparsity(TinySCF_t TinySCF)
+{
+    int nbf = TinySCF->nbasfuncs;
+    double *bf_pair_scrval = TinySCF->bf_pair_scrval;
+    double eta = TinySCF->shell_scrtol2 / TinySCF->max_df_scrval;
+    
+    double st = get_wtime_sec();
+    
     int bf_pair_nnz = 0;
     int *bf_pair_mask = TinySCF->bf_pair_mask;
     int *bf_pair_j    = TinySCF->bf_pair_j;
@@ -243,24 +257,58 @@ void TinySCF_compute_sq_Schwarz_scrvals(TinySCF_t TinySCF)
         bf_mask_displs[i + 1] = bf_pair_nnz;
     }
     
-    double sp_sparsity = (double) sp_nnz / (double) TinySCF->nshellpairs;
+    double sp_sparsity = (double) TinySCF->num_uniq_sp / (double) TinySCF->nshellpairs;
     double bf_pair_sparsity = (double) bf_pair_nnz / (double) TinySCF->mat_size;
     
     double et = get_wtime_sec();
-    TinySCF->shell_scr_time = et - st;
+    double ut = et - st;
+    printf("TinySCF handling shell pair sparsity over,         elapsed time = %.3lf (s)\n", ut);
     
+    st = get_wtime_sec();
     size_t tensor_memsize = (size_t) bf_pair_nnz * (size_t) TinySCF->df_nbf * DBL_SIZE;
     TinySCF->pqA       = (double*) ALIGN64B_MALLOC(tensor_memsize);
     TinySCF->df_tensor = (double*) ALIGN64B_MALLOC(tensor_memsize);
     assert(TinySCF->pqA       != NULL);
     assert(TinySCF->df_tensor != NULL);
     TinySCF->mem_size += (double) tensor_memsize * 2;
+    et = get_wtime_sec();
+    ut = et - st;
     
-    // Print runtime, memory usage and time consumption
-    printf("TinySCF precompute shell screening info over,      elapsed time = %.3lf (s)\n", TinySCF->shell_scr_time);
-    printf("TinySCF memory allocation and initialization over, elapsed time = %.3lf (s)\n", TinySCF->init_time);
+    printf("TinySCF memory allocation and initialization over, elapsed time = %.3lf (s)\n", ut);
     printf("TinySCF regular + density fitting memory usage = %.2lf MB \n", TinySCF->mem_size / 1048576.0);
     printf("#### Sparsity of basis function pairs = %lf, %lf\n", sp_sparsity, bf_pair_sparsity);
+}
+
+void TinySCF_D2Cocc(TinySCF_t TinySCF)
+{
+    double *D_mat    = TinySCF->D_mat;
+    double *Chol_mat = TinySCF->tmp_mat;
+    double *Cocc_mat = TinySCF->Cocc_mat;
+    int    nbf       = TinySCF->nbasfuncs;
+    int    n_occ     = TinySCF->n_occ;
+    
+    int *piv = (int*) malloc(sizeof(int) * nbf);
+    int rank;
+    memcpy(Chol_mat, D_mat, DBL_SIZE * TinySCF->mat_size);
+    
+    // TODO: implement a partial Cholesky decomposition with pivoting
+    LAPACKE_dpstrf(LAPACK_ROW_MAJOR, 'L', nbf, Chol_mat, nbf, piv, &rank, 1e-12);
+    
+    for (int i = 0; i < n_occ; i++)
+    {
+        double *Cocc_row = Cocc_mat + i * n_occ;
+        double *Chol_row = Chol_mat + i * nbf;
+        for (int j = 0; j < i; j++) Cocc_row[j] = Chol_row[j];
+        for (int j = i; j < n_occ; j++) Cocc_row[j] = 0.0;
+    }
+    for (int i = n_occ; i < nbf; i++)
+    {
+        double *Cocc_row = Cocc_mat + i * n_occ;
+        double *Chol_row = Chol_mat + i * nbf;
+        memcpy(Cocc_row, Chol_row, DBL_SIZE * n_occ);
+    }
+    
+    free(piv);
 }
 
 void TinySCF_get_initial_guess(TinySCF_t TinySCF)
@@ -271,6 +319,8 @@ void TinySCF_get_initial_guess(TinySCF_t TinySCF)
     int spos, epos, ldg;
     int nbf = TinySCF->nbasfuncs;
     double *D_mat = TinySCF->D_mat;
+    
+    double t0 = get_wtime_sec();
     
     // Copy the SAD data to diagonal block of the density matrix
     for (int i = 0; i < TinySCF->natoms; i++)
@@ -292,6 +342,15 @@ void TinySCF_get_initial_guess(TinySCF_t TinySCF)
     
     // Calculate nuclear energy
     TinySCF->nuc_energy = CMS_getNucEnergy(TinySCF->basis);
+    
+    double t1 = get_wtime_sec();
+    
+    // Use a (partial) Cholesky decomposition to transform initial D to C_occ
+    TinySCF_D2Cocc(TinySCF);
+    
+    double t2 = get_wtime_sec();
+    
+    printf("TinySCF SAD initial guess: D mat / Cocc mat used %lf, %lf (s)\n", t1 - t0, t2 - t1);
 }
 
 // Compute Hartree-Fock energy

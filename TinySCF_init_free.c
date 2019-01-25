@@ -287,14 +287,6 @@ void TinySCF_init_batch_dgemm_arrays(TinySCF_t TinySCF)
     int nbf    = TinySCF->nbasfuncs;
     int df_nbf = TinySCF->df_nbf;
     
-    // Batch dgemm arrays for temp_K construction
-    TinySCF->temp_K_a = (double**) malloc(sizeof(double*) * nbf);
-    TinySCF->temp_K_b = (double**) malloc(sizeof(double*) * nbf);
-    TinySCF->temp_K_c = (double**) malloc(sizeof(double*) * nbf);
-    assert(TinySCF->temp_K_a != NULL);
-    assert(TinySCF->temp_K_b != NULL);
-    assert(TinySCF->temp_K_c != NULL);
-    
     // Batch dgemm arrays for mat_K construction
     int mat_K_BS = nbf / 10;
     if (mat_K_BS < DGEMM_BLK_SIZE) mat_K_BS = DGEMM_BLK_SIZE;
@@ -345,10 +337,6 @@ void TinySCF_init_batch_dgemm_arrays(TinySCF_t TinySCF)
 
 void TinySCF_free_batch_dgemm_arrays(TinySCF_t TinySCF)
 {
-    free(TinySCF->temp_K_a);
-    free(TinySCF->temp_K_b);
-    free(TinySCF->temp_K_c);
-    
     free(TinySCF->mat_K_transa);
     free(TinySCF->mat_K_transb); 
     free(TinySCF->mat_K_m);
