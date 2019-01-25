@@ -214,79 +214,46 @@ static void build_K_mat_Cocc(TinySCF_t TinySCF, double *temp_K_t, double *K_mat_
     double *df_tensor = TinySCF->df_tensor;
     
     // Construct temporary tensor for K matrix
-    // Formula: temp_K(s, i, p) = dot(Cocc_mat(1:nbf, s), df_tensor(i, 1:nbf, p))
+    // Formula: temp_K(i, s, p) = dot(Cocc_mat(1:nbf, s), df_tensor(i, 1:nbf, p))
     double *A_ptr  = TinySCF->Cocc_mat;
+    double *temp_K = TinySCF->temp_K;
     double *temp_A = TinySCF->temp_K_A;
-    double *temp_B = TinySCF->temp_K_B;
-    int    *bf_pair_mask   = TinySCF->bf_pair_mask;
     int    *bf_pair_j      = TinySCF->bf_pair_j;
     int    *bf_mask_displs = TinySCF->bf_mask_displs;
-    const int temp_K_m   = n_occ;
-    const int temp_K_n   = df_nbf;
-    const int temp_K_k   = nbf;
-    const int temp_K_lda = n_occ;
-    const int temp_K_ldb = df_nbf;
-    const int temp_K_ldc = df_nbf * nbf;
     for (int i = 0; i < nbf; i++)
     {
-        size_t offset_b = (size_t) i * (size_t) nbf * (size_t) df_nbf;
-        size_t offset_c = (size_t) i * (size_t) df_nbf;
-        double *C_ptr = TinySCF->temp_K + offset_c;
-        
-        int cnt = 0;
-        int nbf_i = i * nbf;
+        size_t offset_c = (size_t) i * (size_t) n_occ * (size_t) df_nbf;
+        double *C_ptr = temp_K + offset_c;
         
         int j_idx_spos = bf_mask_displs[i];
         int j_idx_epos = bf_mask_displs[i + 1];
         for (int j_idx = j_idx_spos; j_idx < j_idx_epos; j_idx++)
         {
             int j = bf_pair_j[j_idx];
+            int cnt = j_idx - j_idx_spos;
             memcpy(temp_A + cnt * n_occ,  A_ptr + j * n_occ,  DBL_SIZE * n_occ);
-            cnt++;
         }
         
+        int ncols = j_idx_epos - j_idx_spos;
         cblas_dgemm(
             CblasRowMajor, CblasTrans, CblasNoTrans,
-            n_occ, df_nbf, cnt,
+            n_occ, df_nbf, ncols,
             1.0, temp_A, n_occ, df_tensor + j_idx_spos * df_nbf, df_nbf,
-            0.0, C_ptr, temp_K_ldc
+            0.0, C_ptr, df_nbf
         );
     }
     
     t1 = get_wtime_sec();
 
     // Build K matrix
-    // Formula: K(i, j) = sum_{s=1}^{n_occ} [ dot(temp_K(s, i, 1:df_nbf), temp_K(s, j, 1:df_nbf)) ]
+    // Formula: K(i, j) = sum_{s=1}^{n_occ} [ dot(temp_K(i, s, 1:df_nbf), temp_K(j, s, 1:df_nbf)) ]
     memset(K_mat, 0, DBL_SIZE * nbf * nbf);
-    int ngroups = 3;
-    if (TinySCF->mat_K_group_size[1] == 0) ngroups = 1;
-    for (int s = 0; s < n_occ; s++)
-    {
-        cblas_dgemm_batch(
-            CblasRowMajor, TinySCF->mat_K_transa, TinySCF->mat_K_transb, 
-            TinySCF->mat_K_m, TinySCF->mat_K_n, TinySCF->mat_K_k, 
-            TinySCF->mat_K_alpha, 
-            (const double **) TinySCF->mat_K_a, TinySCF->mat_K_lda,
-            (const double **) TinySCF->mat_K_b, TinySCF->mat_K_ldb,
-            TinySCF->mat_K_beta,
-            TinySCF->mat_K_c, TinySCF->mat_K_ldc,
-            ngroups, TinySCF->mat_K_group_size
-        );
-        
-        size_t offset = (size_t) df_nbf * (size_t) nbf;
-        for (int i = 0; i < TinySCF->mat_K_ntiles; i++)
-        {
-            TinySCF->mat_K_a[i] += offset;
-            TinySCF->mat_K_b[i] += offset;
-        }
-    }
-    // Reset array points to initial values
-    size_t offset = (size_t) n_occ * (size_t) df_nbf * (size_t) nbf;
-    for (int i = 0; i < TinySCF->mat_K_ntiles; i++)
-    {
-        TinySCF->mat_K_a[i] -= offset;
-        TinySCF->mat_K_b[i] -= offset;
-    }
+    cblas_dgemm(
+        CblasRowMajor, CblasNoTrans, CblasTrans,
+        nbf, nbf, n_occ * df_nbf, 
+        1.0, temp_K, n_occ * df_nbf, temp_K, n_occ * df_nbf,
+        0.0, K_mat, nbf
+    );
     
     t2 = get_wtime_sec();
     
@@ -319,7 +286,7 @@ void TinySCF_D2Cocc(TinySCF_t TinySCF)
     {
         double *Cocc_row = Cocc_mat + i * n_occ;
         double *Chol_row = Chol_mat + i * nbf;
-        for (int j = 0; j < n_occ; j++) Cocc_row[j] = Chol_row[j];
+        memcpy(Cocc_row, Chol_row, DBL_SIZE * n_occ);
     }
     
     free(piv);
