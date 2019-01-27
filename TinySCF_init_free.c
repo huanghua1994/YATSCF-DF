@@ -286,6 +286,7 @@ void TinySCF_init_batch_dgemm_arrays(TinySCF_t TinySCF)
     int last_block_size = nbf % mat_K_BS;
     int nblocks0 = nbf / mat_K_BS;
     int ntiles = (nblocks + 1) * nblocks / 2;
+    TinySCF->mat_K_group_size = (int*) malloc(sizeof(int) * nbf);
     int *group_size = TinySCF->mat_K_group_size;
     TinySCF->mat_K_ntiles = ntiles;
     TinySCF->mat_K_BS = mat_K_BS;
@@ -298,19 +299,19 @@ void TinySCF_init_batch_dgemm_arrays(TinySCF_t TinySCF)
         group_size[1] = 0;
         group_size[2] = 0;
     }
-    TinySCF->mat_K_transa = (CBLAS_TRANSPOSE*) malloc(sizeof(CBLAS_TRANSPOSE) * 3);
-    TinySCF->mat_K_transb = (CBLAS_TRANSPOSE*) malloc(sizeof(CBLAS_TRANSPOSE) * 3);
-    TinySCF->mat_K_m      = (int*)     malloc(sizeof(int)     * 3);
-    TinySCF->mat_K_n      = (int*)     malloc(sizeof(int)     * 3);
-    TinySCF->mat_K_k      = (int*)     malloc(sizeof(int)     * 3);
-    TinySCF->mat_K_alpha  = (double*)  malloc(sizeof(double)  * 3);
-    TinySCF->mat_K_beta   = (double*)  malloc(sizeof(double)  * 3);
-    TinySCF->mat_K_a      = (double**) malloc(sizeof(double*) * ntiles);
-    TinySCF->mat_K_b      = (double**) malloc(sizeof(double*) * ntiles);
-    TinySCF->mat_K_c      = (double**) malloc(sizeof(double*) * ntiles);
-    TinySCF->mat_K_lda    = (int*)     malloc(sizeof(int)     * 3);
-    TinySCF->mat_K_ldb    = (int*)     malloc(sizeof(int)     * 3);
-    TinySCF->mat_K_ldc    = (int*)     malloc(sizeof(int)     * 3);
+    TinySCF->mat_K_transa = (CBLAS_TRANSPOSE*) malloc(sizeof(CBLAS_TRANSPOSE) * nbf);
+    TinySCF->mat_K_transb = (CBLAS_TRANSPOSE*) malloc(sizeof(CBLAS_TRANSPOSE) * nbf);
+    TinySCF->mat_K_m      = (int*)     malloc(sizeof(int)     * nbf);
+    TinySCF->mat_K_n      = (int*)     malloc(sizeof(int)     * nbf);
+    TinySCF->mat_K_k      = (int*)     malloc(sizeof(int)     * nbf);
+    TinySCF->mat_K_alpha  = (double*)  malloc(sizeof(double)  * nbf);
+    TinySCF->mat_K_beta   = (double*)  malloc(sizeof(double)  * nbf);
+    TinySCF->mat_K_a      = (double**) malloc(sizeof(double*) * nbf);
+    TinySCF->mat_K_b      = (double**) malloc(sizeof(double*) * nbf);
+    TinySCF->mat_K_c      = (double**) malloc(sizeof(double*) * nbf);
+    TinySCF->mat_K_lda    = (int*)     malloc(sizeof(int)     * nbf);
+    TinySCF->mat_K_ldb    = (int*)     malloc(sizeof(int)     * nbf);
+    TinySCF->mat_K_ldc    = (int*)     malloc(sizeof(int)     * nbf);
     assert(TinySCF->mat_K_transa != NULL);
     assert(TinySCF->mat_K_transb != NULL);
     assert(TinySCF->mat_K_m      != NULL);
@@ -329,6 +330,7 @@ void TinySCF_init_batch_dgemm_arrays(TinySCF_t TinySCF)
 
 void TinySCF_free_batch_dgemm_arrays(TinySCF_t TinySCF)
 {
+    free(TinySCF->mat_K_group_size);
     free(TinySCF->mat_K_transa);
     free(TinySCF->mat_K_transb); 
     free(TinySCF->mat_K_m);
