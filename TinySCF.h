@@ -73,7 +73,7 @@ struct TinySCF_struct
     
     // Density fitting tensors and buffers
     double *pqA, *Jpq, *df_tensor;
-    double *temp_J, *temp_K, *temp_K_A;
+    double *temp_J, *temp_K;
     int    df_nbf_16;
     
     // Matrices and arrays for DIIS
