@@ -186,7 +186,7 @@ void init_TinySCF(TinySCF_t TinySCF, char *bas_fname, char *df_bas_fname, char *
     // Allocate memory for density fitting tensors and buffers
     TinySCF->df_nbf_16 = (TinySCF->df_nbf + 15) / 16 * 16;
     size_t temp_J_memsize = (size_t) TinySCF->df_nbf_16 * (size_t) TinySCF->nthreads;
-    size_t temp_K_memsize = (size_t) TinySCF->mat_size  * (size_t) TinySCF->df_nbf;
+    size_t temp_K_memsize = (size_t) TinySCF->nbasfuncs * (size_t) TinySCF->n_occ * (size_t) TinySCF->df_nbf;
     size_t df_mat_memsize = (size_t) TinySCF->df_nbf    * (size_t) TinySCF->df_nbf;
     df_mat_memsize *= DBL_SIZE;
     temp_J_memsize *= DBL_SIZE;
