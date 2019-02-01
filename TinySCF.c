@@ -294,6 +294,16 @@ void TinySCF_D2Cocc(TinySCF_t TinySCF)
     // TODO: implement a partial Cholesky decomposition with pivoting
     LAPACKE_dpstrf(LAPACK_ROW_MAJOR, 'L', nbf, Chol_mat, nbf, piv, &rank, 1e-12);
     
+    if (rank < n_occ)
+    {
+        for (int i = 0; i < nbf; i++)
+        {
+            double *Chol_row = Chol_mat + i * nbf;
+            #pragma omp simd
+            for (int j = rank; j < n_occ; j++) Chol_row[j] = 0.0;
+        }
+    }
+    
     for (int i = 0; i < n_occ; i++)
     {
         double *Cocc_row = Cocc_mat + i * n_occ;

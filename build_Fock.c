@@ -264,10 +264,14 @@ static void build_K_mat_Cocc(TinySCF_t TinySCF, double *temp_K_t, double *K_mat_
     int *bf_mask_displs = TinySCF->bf_mask_displs;
     int bf_pair_cnt = TinySCF->bf_mask_displs[nbf];
     #pragma omp parallel for schedule(dynamic)
-    for (int irow = 0; irow < bf_pair_cnt; irow++)
+    for (int i = 0; i < bf_pair_cnt; i++)
     {
-        int j = bf_pair_j[irow];
-        memcpy(Cocc_tmp + irow * df_nbf, Cocc_mat + j * n_occ, DBL_SIZE * n_occ);
+        int j = bf_pair_j[i];
+        size_t Cocc_tmp_offset = (size_t) i * (size_t) df_nbf;
+        size_t Cocc_mat_offset = (size_t) j * (size_t) n_occ;
+        double *Cocc_tmp_ptr = Cocc_tmp + Cocc_tmp_offset;
+        double *Cocc_mat_ptr = Cocc_mat + Cocc_mat_offset;
+        memcpy(Cocc_tmp_ptr, Cocc_mat_ptr, DBL_SIZE * n_occ);
     }
     cblas_dgemm_batch(
         CblasRowMajor, TinySCF->mat_K_transa, TinySCF->mat_K_transb,
